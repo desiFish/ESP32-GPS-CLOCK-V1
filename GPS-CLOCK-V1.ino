@@ -79,6 +79,20 @@ TinyGPSPlus gps;
 
 static bool wifiEnabled; // WiFi state variable (initialized from preferences)
 
+bool isWifiButtonPressed()
+{
+  return digitalRead(wifiButtonPin) == HIGH;
+}
+
+void waitForWifiButtonRelease()
+{
+  while (isWifiButtonPressed())
+  {
+    delay(20);
+  }
+  delay(50);
+}
+
 // --- Config state variables ---
 static bool buzzerOn = false;
 static bool displayOffInDark = false;
@@ -453,7 +467,6 @@ time_t prevDisplay = 0; // when the digital clock was displayed
 // for creating task attached to CORE 0 of CPU
 TaskHandle_t loop1Task;
 
-// Add this with other global variables
 byte currentBrightness = 250; // Track current brightness level
 
 const int pwmChannel = 0;    // PWM channel 0–15
@@ -657,6 +670,7 @@ void setup()
 
   if (wifiEnabled)
   {
+    bool skipWifiConnect = false;
     bool wifiConfigExist = pref.isKey("ssid");
     if (!wifiConfigExist)
     {
@@ -717,80 +731,86 @@ void setup()
       while (true)
       {
         delay(50);
-        if (analogRead(wifiButtonPin) > 1000)
+        if (isWifiButtonPressed())
         {
           errorMsgPrint("WIFI", "CANCELLED");
           delay(100);
           server.end();
           WiFi.softAPdisconnect(true);
+          WiFi.mode(WIFI_OFF);
+          waitForWifiButtonRelease();
+          skipWifiConnect = true;
           break; // exit loop to continue normal flow
         }
       }
     }
 
-    WiFi.mode(WIFI_STA);
-    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
-    WiFi.setHostname("GPSClockV1");
-    WiFi.begin(ssid.c_str(), password.c_str());
-    Serial.println("");
-
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_luRS08_tr);
-    u8g2.setCursor(1, 20);
-    u8g2.print("WAITING FOR WIFI");
-    u8g2.setCursor(1, 32);
-    u8g2.print("TO CONNECT");
-    u8g2.sendBuffer();
-
-    // count variable stores the status of WiFi connection. 0 means NOT CONNECTED. 1 means CONNECTED
-
-    bool count = true;
-    while (WiFi.waitForConnectResult() != WL_CONNECTED)
+    if (!skipWifiConnect)
     {
+      WiFi.mode(WIFI_STA);
+      WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
+      WiFi.setHostname("GPSClockV1");
+      WiFi.begin(ssid.c_str(), password.c_str());
+      Serial.println("");
+
       u8g2.clearBuffer();
       u8g2.setFont(u8g2_font_luRS08_tr);
       u8g2.setCursor(1, 20);
-      u8g2.print("COULD NOT CONNECT");
+      u8g2.print("WAITING FOR WIFI");
       u8g2.setCursor(1, 32);
-      u8g2.print("CHECK CONNECTION");
-      u8g2.setCursor(1, 44);
-      u8g2.print("OR, RESET AND");
-      u8g2.setCursor(1, 56);
-      u8g2.print("TRY AGAIN");
-      u8g2.sendBuffer();
-      Serial.println("Connection Failed");
-      delay(6000);
-      count = false;
-      break;
-    }
-    if (count)
-    { // if wifi is connected
-      Serial.println(ssid);
-      Serial.println(WiFi.localIP());
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_luRS08_tr);
-      u8g2.setCursor(1, 20);
-      u8g2.print("WIFI CONNECTED");
-      u8g2.setCursor(1, 42);
-      u8g2.print(WiFi.localIP());
+      u8g2.print("TO CONNECT");
       u8g2.sendBuffer();
 
-      // Setup web server routes first
-      setupWebServer(); // Setup all web server routes and handlers
+      // count variable stores the status of WiFi connection. 0 means NOT CONNECTED. 1 means CONNECTED
 
-      Serial.println("HTTP server started");
+      bool count = true;
+      while (WiFi.waitForConnectResult() != WL_CONNECTED)
+      {
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_luRS08_tr);
+        u8g2.setCursor(1, 20);
+        u8g2.print("COULD NOT CONNECT");
+        u8g2.setCursor(1, 32);
+        u8g2.print("CHECK CONNECTION");
+        u8g2.setCursor(1, 44);
+        u8g2.print("OR, RESET AND");
+        u8g2.setCursor(1, 56);
+        u8g2.print("TRY AGAIN");
+        u8g2.sendBuffer();
+        Serial.println("Connection Failed");
+        delay(6000);
+        count = false;
+        break;
+      }
+      if (count)
+      { // if wifi is connected
+        Serial.println(ssid);
+        Serial.println(WiFi.localIP());
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_luRS08_tr);
+        u8g2.setCursor(1, 20);
+        u8g2.print("WIFI CONNECTED");
+        u8g2.setCursor(1, 42);
+        u8g2.print(WiFi.localIP());
+        u8g2.sendBuffer();
 
-      // Setup OTA after routes
-      ElegantOTA.begin(&server); // Start ElegantOTA
-      // ElegantOTA callbacks
-      ElegantOTA.onStart(onOTAStart);
-      ElegantOTA.onProgress(onOTAProgress);
-      ElegantOTA.onEnd(onOTAEnd);
+        // Setup web server routes first
+        setupWebServer(); // Setup all web server routes and handlers
 
-      // Start server last after all routes are set
-      server.begin();
-      Serial.println("HTTP server started");
-      delay(3500);
+        Serial.println("HTTP server started");
+
+        // Setup OTA after routes
+        ElegantOTA.begin(&server); // Start ElegantOTA
+        // ElegantOTA callbacks
+        ElegantOTA.onStart(onOTAStart);
+        ElegantOTA.onProgress(onOTAProgress);
+        ElegantOTA.onEnd(onOTAEnd);
+
+        // Start server last after all routes are set
+        server.begin();
+        Serial.println("HTTP server started");
+        delay(3500);
+      }
     }
   }
   pref.end();
@@ -969,20 +989,59 @@ void loop(void)
 
   byte count = 0;
   // Handle WiFi button with debounce
-  if (digitalRead(wifiButtonPin) == HIGH)
+  if (isWifiButtonPressed())
   { // Button pressed (active high)
-    while (digitalRead(wifiButtonPin) == HIGH)
+    while (isWifiButtonPressed())
     {
       count++;
       delay(100);
-    }
-    if (count > 10)
-    {
-      if (!pref.begin("database", false))
-      { // open database
-        errorMsgPrint("DATABASE", "ERROR INITIALIZE");
-        delay(100); // Wait between inits
+      if (count > 10 && count < 30)
+      {
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_luRS08_tr);
+        u8g2.setCursor(1, 20);
+        u8g2.print("RELEASE FOR");
+        u8g2.setCursor(1, 32);
+        u8g2.print("WIFI TOGGLE");
+        u8g2.setCursor(1, 46);
+        u8g2.print("KEEP HOLDING");
+        u8g2.setCursor(1, 58);
+        u8g2.print("FOR WIFI RESET");
+        u8g2.sendBuffer();
       }
+      else if (count >= 30 && count < 50)
+      {
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_luRS08_tr);
+        u8g2.setCursor(1, 20);
+        u8g2.print("RELEASE FOR");
+        u8g2.setCursor(1, 32);
+        u8g2.print("WIFI RESET");
+        u8g2.setCursor(1, 46);
+        u8g2.print("KEEP HOLDING");
+        u8g2.setCursor(1, 58);
+        u8g2.print("TO IGNORE");
+        u8g2.sendBuffer();
+      }
+      else if (count >= 50)
+      {
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_luRS08_tr);
+        u8g2.setCursor(1, 20);
+        u8g2.print("RELEASE FOR");
+        u8g2.setCursor(1, 32);
+        u8g2.print("IGNORE ALL");
+        u8g2.sendBuffer();
+      }
+    }
+    if (!pref.begin("database", false))
+    { // open database
+      errorMsgPrint("DATABASE", "ERROR INITIALIZE");
+      delay(100); // Wait between inits
+    }
+    bool restartRequired = false;
+    if (count >= 10 && count < 30)
+    {
       // Toggle WiFi state and save to preferences
       wifiEnabled = !wifiEnabled;
       pref.putBool("wifi_enabled", wifiEnabled);
@@ -996,14 +1055,13 @@ void loop(void)
         u8g2.setCursor(1, 32);
         u8g2.print("RESTARTING");
         u8g2.sendBuffer();
-        pref.end();
+
         delay(1500); // Give time for the serial message to be sent
-        ESP.restart();
+        restartRequired = true;
       }
       else
       {
         // Stop web server
-        pref.end();
         server.end();
         Serial.println("Web server stopped");
         // Disconnect WiFi
@@ -1011,6 +1069,38 @@ void loop(void)
         WiFi.mode(WIFI_OFF);
         Serial.println("WiFi Disabled");
       }
+    }
+    else if (count >= 30 && count < 50)
+    {
+      Serial.println("WiFi Reset - Restarting ESP32...");
+      u8g2.clearBuffer();
+      u8g2.setFont(u8g2_font_luRS08_tr);
+      u8g2.setCursor(1, 20);
+      u8g2.print("RESETTING WIFI");
+      u8g2.setCursor(1, 32);
+      u8g2.print("RESTARTING");
+      u8g2.sendBuffer();
+      pref.putString("ssid", "");
+      pref.putString("password", "");
+      delay(1500); // Give time for the serial message to be sent
+      restartRequired = true;
+    }
+    else if (count >= 50)
+    {
+      Serial.println("Ignoring Switch");
+      u8g2.clearBuffer();
+      u8g2.setFont(u8g2_font_luRS08_tr);
+      u8g2.setCursor(1, 20);
+      u8g2.print("IGNORING WIFI");
+      u8g2.setCursor(1, 32);
+      u8g2.print("TOGGLE/RESET");
+      u8g2.sendBuffer();
+      delay(1500); // Give time for the serial message to be sent
+    }
+    pref.end();
+    if (restartRequired)
+    {
+      ESP.restart();
     }
   }
 
