@@ -39,7 +39,7 @@
   </tr>
   <tr>
     <td>📱 Connectivity</td>
-    <td>WiFi with OTA updates</td>
+    <td>WiFi Manager, LittleFS web UI, and OTA updates</td>
   </tr>
 </table>
 
@@ -90,6 +90,13 @@
 
 | Library | Source | Notes |
 |---------|--------|-------|
+| TinyGPSPlus | Arduino Library Manager | GPS parsing |
+| U8g2 | Arduino Library Manager | ST7920 LCD display |
+| ArduinoJson | Arduino Library Manager | Web API/config JSON |
+| Adafruit BME280 Library | Arduino Library Manager | Temperature, humidity, pressure |
+| Adafruit Unified Sensor | Arduino Library Manager | Required by Adafruit BME280 |
+| BH1750 | Arduino Library Manager | Ambient light sensor |
+| ElegantOTA | Arduino Library Manager | OTA updates |
 | ASyncTCP | [ESP32Async](https://github.com/ESP32Async/AsyncTCP) | Latest version |
 | ESPAsyncWebServer | [ESP32Async](https://github.com/ESP32Async/ESPAsyncWebServer) | Latest version |
 
@@ -103,10 +110,30 @@
 | Step | Instructions | Notes |
 |------|-------------|--------|
 | 1. Initial Upload | Upload via USB/Serial first time | Required for initial flash |
-| 2. LittleFS Upload | [Generate & Upload HTML binaries](https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs/) | For web interface files |
+| 2. LittleFS Upload | [Generate & Upload HTML binaries](https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs/) | Upload the complete `data/` folder |
 | 3. OTA Updates | [Enable ElegantOTA updates](https://randomnerdtutorials.com/esp32-ota-elegantota-arduino/) | For wireless updates |
 
-> ℹ️ **Note:** After initial USB upload, all subsequent updates can be done wirelessly via OTA.
+> ℹ️ **Note:** Upload LittleFS after flashing. The WiFi Manager page is now served from `data/wifimanager.html`; if the `data/` folder is not uploaded, the AP setup page will not load.
+
+> ℹ️ **Note:** After initial USB upload and LittleFS upload, subsequent firmware updates can be done wirelessly via OTA.
+
+</details>
+
+<details>
+<summary><strong>Latest Firmware Notes 🧾</strong></summary>
+
+### v2.0.1
+
+- WiFi Manager HTML moved out of the sketch and into `data/wifimanager.html`.
+- WiFi Manager is served from LittleFS at `/` and `/wifi` while the ESP32 is in AP setup mode.
+- WiFi connection now shows an animated LCD status and fails gracefully instead of looking stuck.
+- WiFi AP cancel now shuts down AP mode cleanly and continues normal clock flow.
+- Date text is generated as one formatted string, preventing spacing issues such as `May2026`.
+- The clock no longer blocks while waiting for GPS; it shows `Waiting for GPS`, `--:--`, and `--` seconds until valid time is received.
+- WiFi button hold screens now update only when the hold action changes.
+- Sensor handling is more robust: missing BH1750/BME280 modules are detected once and skipped later.
+- Auto-brightness avoids floating-point smoothing and keeps the display stable if the light sensor is unavailable.
+- Debug serial output for background sensor work is controlled by the existing debug flag.
 
 </details>
 
