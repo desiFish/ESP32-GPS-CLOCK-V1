@@ -78,6 +78,13 @@ TinyGPSPlus gps;
 #define wifiButtonPin 26 // WiFi toggle button pin
 
 static bool wifiEnabled; // WiFi state variable (initialized from preferences)
+volatile bool restartPending = false;
+volatile unsigned long restartAt = 0;
+
+const bool DEBUG_LIST_LITTLEFS = false;
+const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
+const unsigned long WIFI_CONNECT_ANIM_MS = 500;
+const uint16_t LOOP1_TASK_STACK = 8192;
 
 bool isWifiButtonPressed()
 {
@@ -91,6 +98,12 @@ void waitForWifiButtonRelease()
     delay(20);
   }
   delay(50);
+}
+
+void restartWhenReady()
+{
+  if (restartPending && (long)(millis() - restartAt) >= 0)
+    ESP.restart();
 }
 
 // --- Config state variables ---
@@ -290,8 +303,158 @@ unsigned long ota_progress_millis = 0;
 Adafruit_BME280 bme; // object environmental sensor
 float temperature, humidity, pressure;
 BH1750 lightMeter; // object light sensor
+bool bmeAvailable = false;
+bool lightAvailable = false;
 
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, 18, 23, 5, U8X8_PIN_NONE);
+
+void showWifiConnecting(byte dots)
+{
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_luRS08_tr);
+  u8g2.setCursor(1, 20);
+  u8g2.print("WAITING FOR WIFI");
+  u8g2.setCursor(1, 32);
+  u8g2.print("TO CONNECT");
+  for (byte i = 0; i < dots; i++)
+    u8g2.print(".");
+  u8g2.sendBuffer();
+}
+
+void showWifiButtonStage(byte stage)
+{
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_luRS08_tr);
+  u8g2.setCursor(1, 10);
+  u8g2.print("RELEASE FOR");
+  u8g2.setCursor(1, 22);
+
+  if (stage == 1)
+  {
+    u8g2.print("WIFI TOGGLE");
+    u8g2.setCursor(1, 46);
+    u8g2.print("KEEP HOLDING");
+    u8g2.setCursor(1, 58);
+    u8g2.print("FOR WIFI RESET");
+  }
+  else if (stage == 2)
+  {
+    u8g2.print("WIFI RESET");
+    u8g2.setCursor(1, 46);
+    u8g2.print("KEEP HOLDING");
+    u8g2.setCursor(1, 58);
+    u8g2.print("TO IGNORE");
+  }
+  else
+  {
+    u8g2.print("IGNORE ALL");
+  }
+
+  u8g2.sendBuffer();
+}
+
+bool handleWifiButton()
+{
+  if (!isWifiButtonPressed())
+    return false;
+
+  byte count = 0;
+  byte lastStage = 0;
+
+  while (isWifiButtonPressed())
+  {
+    count++;
+    byte stage = 0;
+
+    if (count > 10 && count < 30)
+      stage = 1;
+    else if (count >= 30 && count < 50)
+      stage = 2;
+    else if (count >= 50)
+      stage = 3;
+
+    if (stage != 0 && stage != lastStage)
+    {
+      showWifiButtonStage(stage);
+      lastStage = stage;
+    }
+
+    restartWhenReady();
+    delay(100);
+  }
+
+  if (count < 10)
+    return false;
+
+  if (!pref.begin("database", false))
+  {
+    errorMsgPrint("DATABASE", "ERROR INITIALIZE");
+    delay(100);
+    return true;
+  }
+
+  bool restartRequired = false;
+  if (count < 30)
+  {
+    wifiEnabled = !wifiEnabled;
+    pref.putBool("wifi_enabled", wifiEnabled);
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_luRS08_tr);
+    u8g2.setCursor(1, 20);
+
+    if (wifiEnabled)
+    {
+      Serial.println("WiFi Enabled - Restarting ESP32...");
+      u8g2.print("CONNECTING WIFI");
+      u8g2.setCursor(1, 32);
+      u8g2.print("RESTARTING");
+      restartRequired = true;
+    }
+    else
+    {
+      server.end();
+      WiFi.disconnect(true);
+      WiFi.mode(WIFI_OFF);
+      Serial.println("WiFi Disabled");
+      u8g2.print("WIFI DISABLED");
+    }
+    u8g2.sendBuffer();
+  }
+  else if (count < 50)
+  {
+    Serial.println("WiFi Reset - Restarting ESP32...");
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_luRS08_tr);
+    u8g2.setCursor(1, 20);
+    u8g2.print("RESETTING WIFI");
+    u8g2.setCursor(1, 32);
+    u8g2.print("RESTARTING");
+    u8g2.sendBuffer();
+    pref.putString("ssid", "");
+    pref.putString("password", "");
+    restartRequired = true;
+  }
+  else
+  {
+    Serial.println("Ignoring Switch");
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_luRS08_tr);
+    u8g2.setCursor(1, 20);
+    u8g2.print("IGNORING WIFI");
+    u8g2.setCursor(1, 32);
+    u8g2.print("TOGGLE/RESET");
+    u8g2.sendBuffer();
+  }
+
+  pref.end();
+  if (restartRequired)
+  {
+    restartPending = true;
+    restartAt = millis() + 1500;
+  }
+
+  return true;
+}
 
 #define LCD_LIGHT 4     // PWM pin for LCD backlight control
 #define lcdEnablePin 33 // LCD enable pin
@@ -464,8 +627,6 @@ void setup()
   ledcAttachChannel(BUZZER_PIN, PWM_FREQ, PWM_RES, BUZZER_CHANNEL);
   // Setup ESP32 PWM for backlight
   ledcAttachChannel(LCD_LIGHT, pwmFreq, pwmResolution, pwmChannel);
-  ledcWrite(LCD_LIGHT, 150);
-
   ledcWrite(LCD_LIGHT, 250);
   u8g2.begin();
   u8g2.clearBuffer();
@@ -477,7 +638,8 @@ void setup()
   u8g2.sendBuffer();
   delay(1000);
 
-  if (!lightMeter.begin(BH1750::ONE_TIME_HIGH_RES_MODE))
+  lightAvailable = lightMeter.begin(BH1750::ONE_TIME_HIGH_RES_MODE);
+  if (!lightAvailable)
   {
     errorMsgPrint("BH1750", "CANNOT FIND");
     delay(100); // Wait between sensor inits
@@ -492,17 +654,19 @@ void setup()
   // Restore WiFi state from preferences (default to true if not set)
   wifiEnabled = pref.getBool("wifi_enabled", true);
 
-  if (!bme.begin(BME280_ADDRESS_ALTERNATE))
+  bmeAvailable = bme.begin(BME280_ADDRESS_ALTERNATE);
+  if (bmeAvailable)
+  {
+    bme.setSampling(Adafruit_BME280::MODE_FORCED,
+                    Adafruit_BME280::SAMPLING_X16, // temperature
+                    Adafruit_BME280::SAMPLING_X16, // pressure
+                    Adafruit_BME280::SAMPLING_X16, // humidity
+                    Adafruit_BME280::FILTER_X16);  // filter
+  }
+  else
   {
     errorMsgPrint("BME280", "CANNOT FIND");
   }
-
-  // Set up oversampling and filter initialization
-  bme.setSampling(Adafruit_BME280::MODE_FORCED,
-                  Adafruit_BME280::SAMPLING_X16, // temperature
-                  Adafruit_BME280::SAMPLING_X16, // pressure
-                  Adafruit_BME280::SAMPLING_X16, // humidity
-                  Adafruit_BME280::FILTER_X16);  // filter
 
   // wifi manager
   // --- LittleFS Init ---
@@ -533,16 +697,16 @@ void setup()
   }
   Serial.println("LittleFS mounted successfully!");
 
-  // Debug - List all files in LittleFS
-  Serial.println("\nListing files in LittleFS root:");
-  File root = LittleFS.open("/");
-  File file = root.openNextFile();
-  while (file)
+  if (DEBUG_LIST_LITTLEFS)
   {
-    String fileName = file.name();
-    size_t fileSize = file.size();
-    Serial.printf(" - File: %s, Size: %u bytes\n", fileName.c_str(), fileSize);
-    file = root.openNextFile();
+    Serial.println("\nListing files in LittleFS root:");
+    File root = LittleFS.open("/");
+    File file = root.openNextFile();
+    while (file)
+    {
+      Serial.printf(" - File: %s, Size: %u bytes\n", file.name(), file.size());
+      file = root.openNextFile();
+    }
   }
 
   loadConfig(); // <-- Load config from LittleFS before anything else
@@ -615,12 +779,13 @@ void setup()
           }
         }
         request->send(200, "text/plain", "Done. Device will now restart.");
-        delay(3000);
-        ESP.restart(); });
+        restartPending = true;
+        restartAt = millis() + 1000; });
       server.begin();
       WiFi.onEvent(WiFiEvent);
       while (true)
       {
+        restartWhenReady();
         delay(50);
         if (isWifiButtonPressed())
         {
@@ -644,18 +809,31 @@ void setup()
       WiFi.begin(ssid.c_str(), password.c_str());
       Serial.println("");
 
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_luRS08_tr);
-      u8g2.setCursor(1, 20);
-      u8g2.print("WAITING FOR WIFI");
-      u8g2.setCursor(1, 32);
-      u8g2.print("TO CONNECT");
-      u8g2.sendBuffer();
+      bool connected = false;
+      byte dots = 0;
+      unsigned long connectStart = millis();
+      unsigned long lastAnim = 0;
+      showWifiConnecting(dots);
 
-      // count variable stores the status of WiFi connection. 0 means NOT CONNECTED. 1 means CONNECTED
+      while (millis() - connectStart < WIFI_CONNECT_TIMEOUT_MS)
+      {
+        if (WiFi.status() == WL_CONNECTED)
+        {
+          connected = true;
+          break;
+        }
 
-      bool count = true;
-      while (WiFi.waitForConnectResult() != WL_CONNECTED)
+        if (millis() - lastAnim >= WIFI_CONNECT_ANIM_MS)
+        {
+          lastAnim = millis();
+          dots = (dots + 1) % 4;
+          showWifiConnecting(dots);
+        }
+
+        delay(50);
+      }
+
+      if (!connected)
       {
         u8g2.clearBuffer();
         u8g2.setFont(u8g2_font_luRS08_tr);
@@ -669,11 +847,11 @@ void setup()
         u8g2.print("TRY AGAIN");
         u8g2.sendBuffer();
         Serial.println("Connection Failed");
-        delay(6000);
-        count = false;
-        break;
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+        delay(3000);
       }
-      if (count)
+      else
       { // if wifi is connected
         Serial.println(ssid);
         Serial.println(WiFi.localIP());
@@ -720,11 +898,11 @@ void setup()
   xTaskCreatePinnedToCore(
       loop1,       // Task function.
       "loop1Task", // name of task.
-      10000,       // Stack size of task
-      NULL,        // parameter of the task
-      1,           // priority of the task
-      &loop1Task,  // Task handle to keep track of created task
-      0);          // pin task to core 0
+      LOOP1_TASK_STACK,
+      NULL,       // parameter of the task
+      1,          // priority of the task
+      &loop1Task, // Task handle to keep track of created task
+      0);         // pin task to core 0
 }
 
 /**
@@ -743,7 +921,7 @@ void loop1(void *pvParameters)
 {
   for (;;)
   {
-    if (millis() - lastLightRead > lightInterval)
+    if (lightAvailable && millis() - lastLightRead > lightInterval)
     {
       lastLightRead = millis();
 
@@ -751,33 +929,41 @@ void loop1(void *pvParameters)
 
       // Block until measurement ready (with timeout for safety)
       unsigned long start = millis();
+      bool lightReady = true;
       while (!lightMeter.measurementReady(true))
       {
-        if (millis() - start > 3000)
-        { // 3s timeout
-          Serial.println("[ERROR] Light sensor timeout!");
+        if (millis() - start > 500)
+        {
+          if (DEBUG_LIST_LITTLEFS)
+            Serial.println("[ERROR] Light sensor timeout!");
+          lightReady = false;
           break;
         }
         yield();
       }
 
-      // Read lux (may be stale if timeout triggered)
-      lux = lightMeter.readLightLevel();
+      if (lightReady)
+      {
+        lux = lightMeter.readLightLevel();
 
-      // Map lux to target brightness
-      byte val1 = constrain(lux, 1, 120);
-      targetBrightness = map(val1, 1, 120, 40, 255);
+        // Map lux to target brightness
+        byte val1 = constrain(lux, 1, 120);
+        targetBrightness = map(val1, 1, 120, 40, 255);
 
-      Serial.print("[DEBUG] Lux = ");
-      Serial.print(lux);
-      Serial.print(", targetBrightness = ");
-      Serial.print(targetBrightness);
-      Serial.print(", isDark = ");
-      Serial.println(isDark);
+        if (DEBUG_LIST_LITTLEFS)
+        {
+          Serial.print("[DEBUG] Lux = ");
+          Serial.print(lux);
+          Serial.print(", targetBrightness = ");
+          Serial.print(targetBrightness);
+          Serial.print(", isDark = ");
+          Serial.println(isDark);
+        }
+      }
     }
 
     // --- Brightness animation every 200ms ---
-    if (millis() - lastBrightnessUpdate > brightnessInterval)
+    if (lightAvailable && millis() - lastBrightnessUpdate > brightnessInterval)
     {
       lastBrightnessUpdate = millis();
 
@@ -791,60 +977,69 @@ void loop1(void *pvParameters)
       }
       else
       {
-        // exponential moving average (EMA)
-        float alpha = 0.7; // smoother 0.7-0.9
-        float tempBrightness = currentBrightness;
-        tempBrightness = tempBrightness * alpha + targetBrightness * (1.0 - alpha);
-        currentBrightness = (byte)tempBrightness;
+        currentBrightness = (currentBrightness * 7 + targetBrightness * 3) / 10;
       }
 
       // Only write PWM if it changed
       if (currentBrightness != previousBrightness)
       {
         ledcWrite(LCD_LIGHT, currentBrightness);
-        Serial.print("[DEBUG] Brightness = ");
-        Serial.println(currentBrightness);
+        if (DEBUG_LIST_LITTLEFS)
+        {
+          Serial.print("[DEBUG] Brightness = ");
+          Serial.println(currentBrightness);
+        }
       }
     }
 
     if ((millis() - lastTime2) > timerDelay2)
     {
-      if (!(isDark && displayOffInDark)) // Only read sensor if not in dark mode with offInDark enabled
+      if (bmeAvailable && !(isDark && displayOffInDark)) // Only read sensor if not in dark mode with offInDark enabled
       {
-        Serial.println("[DEBUG] loop1: Reading temperature/humidity sensor...");
+        if (DEBUG_LIST_LITTLEFS)
+          Serial.println("[DEBUG] loop1: Reading temperature/humidity sensor...");
         bme.takeForcedMeasurement();
         temperature = bme.readTemperature();
         humidity = bme.readHumidity();
         pressure = bme.readPressure() / 100.0F;
-        Serial.print("[DEBUG] loop1: Temp=");
-        Serial.print(temperature);
-        Serial.print(", Hum=");
-        Serial.print(humidity);
-        Serial.print(", Pressure=");
-        Serial.println(pressure);
+        if (DEBUG_LIST_LITTLEFS)
+        {
+          Serial.print("[DEBUG] loop1: Temp=");
+          Serial.print(temperature);
+          Serial.print(", Hum=");
+          Serial.print(humidity);
+          Serial.print(", Pressure=");
+          Serial.println(pressure);
+        }
       }
       lastTime2 = millis();
     }
 
     static bool alarmTriggered = false; // persists across loop iterations
+    byte alarmMinute = minutes;
+    byte alarmHour = hours;
+    int alarmYear = years;
 
-    if (buzzerOn && !isDark && years > 2024)
+    if (buzzerOn && !isDark && alarmYear > 2024)
     {
       int beeps = 0;
 
-      if (minutes == 0)
+      if (alarmMinute == 0)
         beeps = 1;
-      else if (minutes == 30)
+      else if (alarmMinute == 30)
         beeps = 2;
 
       if (beeps > 0)
       {
         if (!alarmTriggered) // only trigger once per minute
         {
-          Serial.print("[DEBUG] Alarm triggered at ");
-          Serial.print(hours);
-          Serial.print(":");
-          Serial.println(minutes);
+          if (DEBUG_LIST_LITTLEFS)
+          {
+            Serial.print("[DEBUG] Alarm triggered at ");
+            Serial.print(alarmHour);
+            Serial.print(":");
+            Serial.println(alarmMinute);
+          }
 
           simpleBeep(beeps, 500, 255);
           alarmTriggered = true;
@@ -856,7 +1051,7 @@ void loop1(void *pvParameters)
         alarmTriggered = false;
       }
     }
-    delay(50);
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
@@ -875,125 +1070,13 @@ void loop(void)
 { // used for blinking ":" in time (for display)
   static bool pulse = true;
   static bool wasInDarkMode = false;
-  if (WiFi.status() == WL_CONNECTED)
+  restartWhenReady();
+  bool wifiConnected = WiFi.status() == WL_CONNECTED;
+  if (wifiConnected)
     ElegantOTA.loop();
 
-  byte count = 0;
-  // Handle WiFi button with debounce
-  if (isWifiButtonPressed())
-  { // Button pressed (active high)
-    while (isWifiButtonPressed())
-    {
-      count++;
-      delay(100);
-      if (count > 10 && count < 30)
-      {
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_luRS08_tr);
-        u8g2.setCursor(1, 10);
-        u8g2.print("RELEASE FOR");
-        u8g2.setCursor(1, 22);
-        u8g2.print("WIFI TOGGLE");
-        u8g2.setCursor(1, 46);
-        u8g2.print("KEEP HOLDING");
-        u8g2.setCursor(1, 58);
-        u8g2.print("FOR WIFI RESET");
-        u8g2.sendBuffer();
-      }
-      else if (count >= 30 && count < 50)
-      {
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_luRS08_tr);
-        u8g2.setCursor(1, 10);
-        u8g2.print("RELEASE FOR");
-        u8g2.setCursor(1, 22);
-        u8g2.print("WIFI RESET");
-        u8g2.setCursor(1, 46);
-        u8g2.print("KEEP HOLDING");
-        u8g2.setCursor(1, 58);
-        u8g2.print("TO IGNORE");
-        u8g2.sendBuffer();
-      }
-      else if (count >= 50)
-      {
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_luRS08_tr);
-        u8g2.setCursor(1, 10);
-        u8g2.print("RELEASE FOR");
-        u8g2.setCursor(1, 22);
-        u8g2.print("IGNORE ALL");
-        u8g2.sendBuffer();
-      }
-    }
-    if (!pref.begin("database", false))
-    { // open database
-      errorMsgPrint("DATABASE", "ERROR INITIALIZE");
-      delay(100); // Wait between inits
-    }
-    bool restartRequired = false;
-    if (count >= 10 && count < 30)
-    {
-      // Toggle WiFi state and save to preferences
-      wifiEnabled = !wifiEnabled;
-      pref.putBool("wifi_enabled", wifiEnabled);
-      if (wifiEnabled)
-      {
-        Serial.println("WiFi Enabled - Restarting ESP32...");
-        u8g2.clearBuffer();
-        u8g2.setFont(u8g2_font_luRS08_tr);
-        u8g2.setCursor(1, 20);
-        u8g2.print("CONNECTING WIFI");
-        u8g2.setCursor(1, 32);
-        u8g2.print("RESTARTING");
-        u8g2.sendBuffer();
-
-        delay(1500); // Give time for the serial message to be sent
-        restartRequired = true;
-      }
-      else
-      {
-        // Stop web server
-        server.end();
-        Serial.println("Web server stopped");
-        // Disconnect WiFi
-        WiFi.disconnect(true);
-        WiFi.mode(WIFI_OFF);
-        Serial.println("WiFi Disabled");
-      }
-    }
-    else if (count >= 30 && count < 50)
-    {
-      Serial.println("WiFi Reset - Restarting ESP32...");
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_luRS08_tr);
-      u8g2.setCursor(1, 20);
-      u8g2.print("RESETTING WIFI");
-      u8g2.setCursor(1, 32);
-      u8g2.print("RESTARTING");
-      u8g2.sendBuffer();
-      pref.putString("ssid", "");
-      pref.putString("password", "");
-      delay(1500); // Give time for the serial message to be sent
-      restartRequired = true;
-    }
-    else if (count >= 50)
-    {
-      Serial.println("Ignoring Switch");
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_luRS08_tr);
-      u8g2.setCursor(1, 20);
-      u8g2.print("IGNORING WIFI");
-      u8g2.setCursor(1, 32);
-      u8g2.print("TOGGLE/RESET");
-      u8g2.sendBuffer();
-      delay(1500); // Give time for the serial message to be sent
-    }
-    pref.end();
-    if (restartRequired)
-    {
-      ESP.restart();
-    }
-  }
+  if (handleWifiButton())
+    return;
 
   if (displayOffInDark && isDark)
   {
@@ -1017,18 +1100,13 @@ void loop(void)
     u8g2.setPowerSave(0);    // Turn on display
   }
 
-  while (gps.hdop.hdop() > 100 && gps.satellites.value() < 2)
-  { // if gps signal is weak
-    gpsInfo("Waiting for GPS...");
-  }
-  const char *ampmStr;
   while (Serial1.available())
   {
     if (gps.encode(Serial1.read()))
     { // process gps messages
       // when TinyGPSPlus reports new data...
       unsigned long age = gps.time.age();
-      if (age < 500)
+      if (age < 500 && gps.date.isValid() && gps.time.isValid())
       {
         // Build tm struct with GPS UTC
         struct tm tmUTC = {};
@@ -1061,11 +1139,7 @@ void loop(void)
         byte hour12 = timeinfo.tm_hour % 12;
         if (hour12 == 0)
           hour12 = 12; // midnight or noon → 12
-        const char *ampm = (timeinfo.tm_hour < 12) ? "AM" : "PM";
-
-        // If you want globals for 12h format:
         hours = hour12Mode ? hour12 : timeinfo.tm_hour;
-        ampmStr = hour12Mode ? ampm : "";
       }
     }
   }
@@ -1074,32 +1148,49 @@ void loop(void)
   { // if OTA update is not in progress
 
     static time_t prevEpoch = 0;
-    if (currentEpoch != prevEpoch)
+    static unsigned long lastWaitingDisplay = 0;
+    bool timeReady = currentEpoch > 0 && years > 2025;
+    unsigned long now = millis();
+    bool refreshDisplay = timeReady ? (currentEpoch != prevEpoch) : (lastWaitingDisplay == 0 || now - lastWaitingDisplay >= 1000);
+
+    if (refreshDisplay)
     {
-      prevEpoch = currentEpoch;
+      if (timeReady)
+        prevEpoch = currentEpoch;
+      else
+        lastWaitingDisplay = now;
+
+      const char *ampmStr = (timeReady && hour12Mode) ? ((timeinfo.tm_hour < 12) ? "AM" : "PM") : "";
       u8g2.clearBuffer();
       u8g2.setFont(u8g2_font_t0_12_tf);
-      if (pressure == 0 && temperature == 0 && humidity == 0)
+      if (!timeReady)
       {
-        String var = "Updating...";
-        int stringWidth = u8g2.getStrWidth(var.c_str());
-        u8g2.setCursor(((128 - stringWidth) / 2), 13);
-        u8g2.print(var);
+        const char *msg = "Waiting for GPS";
+        u8g2.setCursor((128 - u8g2.getStrWidth(msg)) / 2, 13);
+        u8g2.print(msg);
+      }
+      else if (pressure == 0 && temperature == 0 && humidity == 0)
+      {
+        const char *msg = "Updating...";
+        u8g2.setCursor((128 - u8g2.getStrWidth(msg)) / 2, 13);
+        u8g2.print(msg);
       }
       else
       {
+        char sensorText[12];
         u8g2.setCursor(2, 13);
-        u8g2.print(String(temperature, 1)); // Show temperature with 1 decimal place
+        dtostrf(temperature, 0, 1, sensorText);
+        u8g2.print(sensorText); // Show temperature with 1 decimal place
         u8g2.setFont(u8g2_font_threepix_tr);
         u8g2.setCursor(28, 8);
         u8g2.print("o");
         u8g2.setFont(u8g2_font_t0_11_tf);
         u8g2.setCursor(32, 13);
         u8g2.print("C ");
-        String var = String(int(pressure)) + "hPa";        // Ensure font is set
-        int stringWidth = u8g2.getStrWidth(var.c_str());   // Get exact pixel width
+        snprintf(sensorText, sizeof(sensorText), "%dhPa", int(pressure));
+        int stringWidth = u8g2.getStrWidth(sensorText);    // Get exact pixel width
         u8g2.setCursor(((128 - stringWidth) / 2) + 3, 13); // Center using screen width
-        u8g2.print(var);
+        u8g2.print(sensorText);
         if (int(humidity) > 99)
           u8g2.setCursor(90, 13);
         else
@@ -1111,15 +1202,22 @@ void loop(void)
       u8g2.setFont(u8g2_font_samim_12_t_all);
       u8g2.setCursor(4, 29);
       char dateText[18];
-      makeDateString(dateText, sizeof(dateText));
-      u8g2.print(dateText);
+      if (timeReady)
+      {
+        makeDateString(dateText, sizeof(dateText));
+        u8g2.print(dateText);
+      }
+      else
+      {
+        u8g2.print("-- --- ----");
+      }
       u8g2.setCursor(100, 29);
-      u8g2.print(week[timeinfo.tm_wday]);
+      u8g2.print(timeReady ? week[timeinfo.tm_wday] : "--");
 
       u8g2.drawLine(0, 31, 127, 31);
 
-      if (days == 6 && months == 9) // set this to ZERO if you don't want to show birthday message
-      {                             // special message on birthday
+      if (timeReady && days == 6 && months == 9) // set this to ZERO if you don't want to show birthday message
+      {                                          // special message on birthday
         u8g2.setFont(u8g2_font_6x13_tr);
         u8g2.setCursor(5, 43);
         u8g2.print("HAPPY BIRTHDAY NINI!");
@@ -1151,7 +1249,7 @@ void loop(void)
         if (buzzerOn && !isDark)          // if buzzer on and if mute on dark is not active (or false)
           u8g2.drawUTF8(5, 54, "\ue271"); // symbol for hourly/half-hourly alarm
 
-        if (WiFi.status() == WL_CONNECTED)
+        if (wifiConnected)
           u8g2.drawUTF8(5, 64, "\ue2b5"); // wifi-active symbol
       }
       else
@@ -1159,33 +1257,57 @@ void loop(void)
         // normal display
         u8g2.setFont(u8g2_font_logisoso30_tn);
         u8g2.setCursor(15, 63);
-        if (hours < 10)
-          u8g2.print("0");
-        u8g2.print(hours);
-        u8g2.print(pulse ? ":" : "");
+        if (timeReady)
+        {
+          if (hours < 10)
+            u8g2.print("0");
+          u8g2.print(hours);
+          u8g2.print(pulse ? ":" : "");
+        }
+        else
+        {
+          u8g2.print("--:");
+        }
 
         u8g2.setCursor(63, 63);
-        if (minutes < 10)
-          u8g2.print("0");
-        u8g2.print(minutes);
+        if (timeReady)
+        {
+          if (minutes < 10)
+            u8g2.print("0");
+          u8g2.print(minutes);
+        }
+        else
+        {
+          u8g2.print("--");
+        }
 
         u8g2.setFont(u8g2_font_tenthinnerguys_tu);
         u8g2.setCursor(105, 42);
-        if (seconds < 10)
-          u8g2.print("0");
-        u8g2.print(seconds);
+        if (timeReady)
+        {
+          if (seconds < 10)
+            u8g2.print("0");
+          u8g2.print(seconds);
+        }
+        else
+        {
+          u8g2.setFont(u8g2_font_7x14B_mr);
+          u8g2.setCursor(105, 44);
+          u8g2.print("--");
+        }
 
         u8g2.setCursor(105, 63);
-        u8g2.print(ampmStr);
+        if (timeReady)
+          u8g2.print(ampmStr);
 
         u8g2.setFont(u8g2_font_waffle_t_all);
 
-        if (buzzerOn && !isDark)
+        if (timeReady && buzzerOn && !isDark)
         {
           u8g2.drawUTF8(103, 52, "\ue271");
         } // symbol for hourly/half-hourly alarm
 
-        if (WiFi.status() == WL_CONNECTED)
+        if (wifiConnected)
           u8g2.drawUTF8(112, 52, "\ue2b5"); // wifi-active symbol
       }
       u8g2.sendBuffer();
@@ -1239,66 +1361,6 @@ void simpleBeep(int numBeeps, int duration_ms, byte maxVolume)
     if (b < numBeeps - 1)
       delay(pauseTime);
   }
-}
-
-/**
- * @brief Display GPS information screen
- * @param msg Status message to display
- * Shows:
- * - Number of satellites
- * - HDOP value
- * - Speed in km/h
- * - Fix age
- * - Altitude
- * - Latitude/Longitude
- */
-void gpsInfo(String msg)
-{
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_luRS08_tr);
-  u8g2.setCursor(1, 9);
-  u8g2.print(msg);
-  u8g2.setFont(u8g2_font_5x7_mr);
-  u8g2.setCursor(1, 24);
-  u8g2.print("Satellites");
-  u8g2.setCursor(25, 36);
-  u8g2.print(gps.satellites.value());
-
-  u8g2.setCursor(58, 24);
-  u8g2.print("HDOP");
-  u8g2.setCursor(58, 36);
-  u8g2.print(gps.hdop.hdop());
-
-  u8g2.setCursor(92, 24);
-  u8g2.print("Speed");
-  u8g2.setCursor(86, 36);
-  u8g2.print(int(gps.speed.kmph()));
-  u8g2.setFont(u8g2_font_micro_tr);
-  u8g2.print("kmph");
-  u8g2.setFont(u8g2_font_5x7_mr);
-
-  u8g2.setCursor(1, 51);
-  u8g2.print("Fix Age");
-  u8g2.setCursor(6, 63);
-  u8g2.print(gps.time.age());
-  u8g2.print("ms"); //
-
-  u8g2.setCursor(42, 51);
-  u8g2.print("Altitude");
-  u8g2.setCursor(42, 63);
-  u8g2.print(gps.altitude.meters());
-  u8g2.print("m");
-
-  u8g2.setCursor(88, 51);
-  u8g2.print("Lat & Lng");
-  u8g2.setCursor(88, 57);
-  u8g2.setFont(u8g2_font_4x6_tn);
-  u8g2.print(gps.location.lat(), 7);
-  u8g2.setCursor(88, 64);
-  u8g2.print(gps.location.lng(), 7);
-
-  u8g2.sendBuffer();
-  smartDelay(900);
 }
 
 /**
