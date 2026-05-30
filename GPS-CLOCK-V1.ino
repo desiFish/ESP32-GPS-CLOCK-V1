@@ -66,7 +66,7 @@
 Preferences pref;
 
 // Software version
-#define SWVersion "v2.0.0"
+#define SWVersion "v2.0.1"
 
 // --- Async Web Server ---
 AsyncWebServer server(80);
