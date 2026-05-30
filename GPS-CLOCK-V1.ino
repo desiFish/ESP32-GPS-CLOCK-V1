@@ -304,6 +304,30 @@ char monthChar[12][12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"
 byte days = 0, months = 0, hours = 0, minutes = 0, seconds = 0;
 int years = 0;
 
+const char *daySuffix(byte day)
+{
+  if (day >= 11 && day <= 13)
+    return "th";
+
+  switch (day % 10)
+  {
+  case 1:
+    return "st";
+  case 2:
+    return "nd";
+  case 3:
+    return "rd";
+  default:
+    return "th";
+  }
+}
+
+void makeDateString(char *buffer, size_t length)
+{
+  const char *monthName = (months >= 1 && months <= 12) ? monthChar[months - 1] : "---";
+  snprintf(buffer, length, "%u%s %s %04d", days, daySuffix(days), monthName, years);
+}
+
 bool isDark, hour12Mode = true; // Tracks ambient light state
 
 // LUX (BH1750) update frequency
@@ -1086,29 +1110,9 @@ void loop(void)
       u8g2.drawLine(0, 17, 127, 17);
       u8g2.setFont(u8g2_font_samim_12_t_all);
       u8g2.setCursor(4, 29);
-      if (days < 10)
-        u8g2.print("0");
-      u8g2.print(days);
-      byte x = days % 10;
-      u8g2.setFont(u8g2_font_tiny_simon_tr);
-      u8g2.setCursor(19, 25);
-
-      if (days == 11 || days == 12 || days == 13)
-        u8g2.print("th");
-      else if (x == 1)
-        u8g2.print("st");
-      else if (x == 2)
-        u8g2.print("nd");
-      else if (x == 3)
-        u8g2.print("rd");
-      else
-        u8g2.print("th");
-
-      u8g2.setFont(u8g2_font_samim_12_t_all);
-      u8g2.setCursor(29, 29);
-      u8g2.print(monthChar[months - 1]);
-      u8g2.setCursor(52, 29);
-      u8g2.print(years);
+      char dateText[18];
+      makeDateString(dateText, sizeof(dateText));
+      u8g2.print(dateText);
       u8g2.setCursor(100, 29);
       u8g2.print(week[timeinfo.tm_wday]);
 
