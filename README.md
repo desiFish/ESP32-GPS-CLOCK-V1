@@ -12,12 +12,6 @@
   <p align="center">
     <i>ESP32 GPS Clock & Weather Station is an open-source project that combines an ESP32 microcontroller with a GPS receiver and environmental sensors to create a satellite-synchronized digital clock and weather monitor. It displays precise time, temperature, humidity, and atmospheric data, making it ideal for DIY electronics enthusiasts, Arduino/ESP32 hobbyists, and IoT developers who need reliable, real-time information. With built-in support for auto-brightness control, OTA updates, and expandable hardware, this project works as both a GPS-based timekeeping alternative to NTP and a compact home weather station.🛰️</i>
   </p>
-  <table>
-    <tr>
-      <td width="50%"><img src="resources/images/x.png" alt="GPS Clock desktop view" width="100%"></td>
-      <td width="50%"><img src="resources/images/y.png" alt="GPS Clock mobile view" width="100%"></td>
-    </tr>
-  </table>
 </div>
 
 <hr style="border: 2px solid #f0f0f0; margin: 30px 0;">
@@ -239,6 +233,20 @@ Temperature readings can be higher than room temperature if the BME280 is close 
 <h2>📸 Gallery</h2>
 <div align="center">
   <table>
+    <tr>
+      <td width="50%">
+        <a href="resources/images/x.png">
+          <img src="resources/images/x.png" alt="GPS Clock desktop view" width="100%" style="max-height: 360px; object-fit: contain;">
+        </a>
+        <p><em>Web interface — Desktop view 🖥️</em></p>
+      </td>
+      <td width="50%">
+        <a href="resources/images/y.png">
+          <img src="resources/images/y.png" alt="GPS Clock mobile view" width="100%" style="max-height: 360px; object-fit: contain;">
+        </a>
+        <p><em>Web interface — Mobile view 📱</em></p>
+      </td>
+    </tr>
     <tr>
       <!-- First Row -->
       <td width="33%">
