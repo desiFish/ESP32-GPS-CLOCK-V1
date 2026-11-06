@@ -1,6 +1,8 @@
 /*
  * GPS-CLOCK-V1.ino
  *
+ * Board setup: Select "ESP32 Dev Module" in the Arduino IDE and use the default board options.
+ *
  * Note: An enhanced version of this project with buttons for better device configuration
  * is available at: https://github.com/desiFish/GPS-CLOCK-V2
  *
@@ -36,9 +38,6 @@
  *
  * Buzzer:
  *   - Control: GPIO25
-
- * Sketch uses 1099226 bytes (83%) of program storage space. Maximum is 1310720 bytes.
- * Global variables use 49520 bytes (15%) of dynamic memory, leaving 278160 bytes for local variables. Maximum is 327680 bytes.
  */
 
 #include <SPI.h>
