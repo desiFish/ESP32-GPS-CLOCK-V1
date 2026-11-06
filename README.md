@@ -12,6 +12,12 @@
   <p align="center">
     <i>ESP32 GPS Clock & Weather Station is an open-source project that combines an ESP32 microcontroller with a GPS receiver and environmental sensors to create a satellite-synchronized digital clock and weather monitor. It displays precise time, temperature, humidity, and atmospheric data, making it ideal for DIY electronics enthusiasts, Arduino/ESP32 hobbyists, and IoT developers who need reliable, real-time information. With built-in support for auto-brightness control, OTA updates, and expandable hardware, this project works as both a GPS-based timekeeping alternative to NTP and a compact home weather station.🛰️</i>
   </p>
+  <table>
+    <tr>
+      <td width="50%"><img src="resources/images/x.png" alt="GPS Clock desktop view" width="100%"></td>
+      <td width="50%"><img src="resources/images/y.png" alt="GPS Clock mobile view" width="100%"></td>
+    </tr>
+  </table>
 </div>
 
 <hr style="border: 2px solid #f0f0f0; margin: 30px 0;">
@@ -27,19 +33,19 @@
 <table>
   <tr>
     <td>🕒 Time</td>
-    <td>GPS-synchronized precise timekeeping</td>
+    <td>GPS-synchronized time, selectable 12/24-hour display, and configurable fixed UTC offset</td>
   </tr>
   <tr>
     <td>🌡️ Environment</td>
-    <td>Temperature & humidity monitoring</td>
+    <td>BME280 temperature, humidity, and pressure monitoring</td>
   </tr>
   <tr>
     <td>🔆 Display</td>
-    <td>Auto-brightness & power saving</td>
+    <td>Automatic brightness with an adjustable minimum and optional display-off-in-dark mode</td>
   </tr>
   <tr>
     <td>📱 Connectivity</td>
-    <td>WiFi Manager, LittleFS web UI, and OTA updates</td>
+    <td>Wi-Fi Manager, browser-based settings, OTA updates, and reset-to-defaults</td>
   </tr>
 </table>
 
@@ -97,61 +103,67 @@
 | Adafruit Unified Sensor | Arduino Library Manager | Required by Adafruit BME280 |
 | BH1750 | Arduino Library Manager | Ambient light sensor |
 | ElegantOTA | Arduino Library Manager | OTA updates |
-| ASyncTCP | [ESP32Async](https://github.com/ESP32Async/AsyncTCP) | Latest version |
+| AsyncTCP | [ESP32Async](https://github.com/ESP32Async/AsyncTCP) | Latest version |
 | ESPAsyncWebServer | [ESP32Async](https://github.com/ESP32Async/ESPAsyncWebServer) | Latest version |
 
 > ℹ️ **Note:** We use the libraries from ESP32Async repository as they are regularly maintained and updated.
 
 </details>
 
-<details>
-<summary><strong>Initial Setup and Updates 🚀</strong></summary>
+<h2>🚀 Installation and first start</h2>
 
-| Step | Instructions | Notes |
-|------|-------------|--------|
-| 1. Initial Upload | Upload via USB/Serial first time | Required for initial flash |
-| 2. LittleFS Upload | [Generate & Upload HTML binaries](https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs/) | Upload the complete `data/` folder |
-| 3. OTA Updates | [Enable ElegantOTA updates](https://randomnerdtutorials.com/esp32-ota-elegantota-arduino/) | For wireless updates |
+1. Install the ESP32 Arduino board support and the libraries listed above.
+2. Connect the ESP32 to USB and upload `GPS-CLOCK-V1.ino` using the Arduino IDE or your preferred ESP32 toolchain.
+3. Upload the complete `data/` directory to the device's LittleFS filesystem. The web interface, including Wi-Fi Manager, is served from these files; the clock can run without the pages, but browser setup and settings will not be available.
+   - [Arduino IDE 2 LittleFS upload instructions](https://randomnerdtutorials.com/arduino-ide-2-install-esp32-littlefs/)
+4. Restart the clock. On first start, or when Wi-Fi credentials have been cleared, it opens a setup access point:
+   - **Network (SSID):** `WIFI_MANAGER`
+   - **Password:** `WIFImanager`
+5. Connect a phone or computer to that network and open [http://192.168.4.1](http://192.168.4.1). Enter the name and password of the 2.4 GHz Wi-Fi network the clock should join, then submit. The clock saves the credentials and restarts.
+6. Once connected to your Wi-Fi, find the clock's IP address in your router or on the clock's display, then open `http://<clock-ip>/` in a browser.
 
-> ℹ️ **Note:** Upload LittleFS after flashing. The WiFi Manager page is now served from `data/wifimanager.html`; if the `data/` folder is not uploaded, the AP setup page will not load.
+The GPS receiver needs a clear view of the sky to acquire satellites. Time and date appear after a valid GPS fix. The clock does not need internet access for GPS timekeeping; Wi-Fi is used for the web settings and OTA updates.
 
-> ℹ️ **Note:** After initial USB upload and LittleFS upload, subsequent firmware updates can be done wirelessly via OTA.
+<h2>🧭 Using the clock and web settings</h2>
 
-</details>
+Open the clock's IP address in a browser. Settings save when changed; there is no separate Save button except for the timezone field. The device gives a short beep after a setting is saved.
 
-<details>
-<summary><strong>Latest Firmware Notes 🧾</strong></summary>
+- **24-hour time:** Turn on to display hours from `00` through `23`. Turn off for 12-hour time with AM/PM.
+- **Timezone:** Enter a signed UTC offset in `±HH:MM` format. For example, `+5:30` for IST is converted by the page to `19800` seconds and sent to the clock. Valid offsets range from UTC−12:00 to UTC+14:00. [Find a timezone offset](https://www.timeanddate.com/time/zones/).
+- **Daylight saving:** DST is not supported. The clock uses the same fixed UTC offset throughout the year; update it manually when your local offset changes.
+- **Minimum display brightness:** Adjust the lower brightness limit from 40 to 255. Automatic brightness still responds to the BH1750 light sensor.
+- **Display off in darkness:** Enable to switch off the display when the light sensor detects darkness.
+- **Hourly chime:** Enable or disable the buzzer's hourly and half-hourly chimes.
+- **Device status:** The home page shows whether the browser can currently reach the clock.
+- **GPS information / Hardware:** Use the links on the home page to view GPS and device details. The GPS page also offers a map link when coordinates are available.
 
-### v2.0.1
+<h3>Wi-Fi button</h3>
 
-- WiFi Manager HTML moved out of the sketch and into `data/wifimanager.html`.
-- WiFi Manager is served from LittleFS at `/` and `/wifi` while the ESP32 is in AP setup mode.
-- WiFi connection now shows an animated LCD status and fails gracefully instead of looking stuck.
-- WiFi AP cancel now shuts down AP mode cleanly and continues normal clock flow.
-- Date text is generated as one formatted string, preventing spacing issues such as `May2026`.
-- The clock no longer blocks while waiting for GPS; it shows `Waiting for GPS`, `--:--`, and `--` seconds until valid time is received.
-- WiFi button hold screens now update only when the hold action changes.
-- Sensor handling is more robust: missing BH1750/BME280 modules are detected once and skipped later.
-- Auto-brightness avoids floating-point smoothing and keeps the display stable if the light sensor is unavailable.
-- Debug serial output for background sensor work is controlled by the existing debug flag.
+- Press and release to toggle Wi-Fi on or off. The display indicates the action; releasing the button restarts the clock to apply it.
+- Hold the button for 10 seconds to clear saved settings and Wi-Fi credentials. Release it to restart into Wi-Fi Manager.
 
-</details>
+<h3>Reset settings</h3>
+
+Use **Reset device** on the home page and confirm the prompt to clear saved settings and Wi-Fi credentials. The page shows a five-second countdown, then the clock restarts into Wi-Fi Manager. Connect to `WIFI_MANAGER` and enter the Wi-Fi credentials again. Reset defaults include Wi-Fi enabled, the buzzer off, 12-hour time, UTC+05:30, a minimum brightness of 70, and display-off-in-dark disabled.
+
+<h3>OTA firmware updates</h3>
+
+After connecting to Wi-Fi, open the clock's IP address followed by `/update` (for example, `http://192.168.1.50/update`) and follow the ElegantOTA page to upload firmware. OTA updates the firmware; when web files change, upload the complete `data/` directory to LittleFS separately using the filesystem uploader. For the first installation, use USB/serial and upload LittleFS separately.
+
+<h3>Temperature sensor placement</h3>
+
+Temperature readings can be higher than room temperature if the BME280 is close to the ESP32, which produces heat, or near the top of the enclosure where warm air rises. In this clock, moving the sensor to the lower part of the enclosure, away from the ESP32, resolved the consistently elevated readings. Keep the sensor clear of the ESP32 and other heat sources for more representative ambient readings.
 
 <div style="background-color: #f8f9fa; border-radius: 10px; padding: 20px; margin: 20px 0;">
   <h3>🎯 Key Features Explained</h3>
   <ul>
-    <li>🕒 <strong>Precise Timekeeping:</strong> GPS-synchronized time with battery backup</li>
-    <li>🌡️ <strong>Environmental Monitoring:</strong> Temperature and humidity tracking</li>
-    <li>📱 <strong>Smart Connectivity:</strong> WiFi enabled with web configuration</li>
-    <li>🔆 <strong>Adaptive Display:</strong> Auto-brightness with power saving</li>
+    <li>🕒 <strong>Timekeeping:</strong> GPS-synchronized time; an optional backup battery can help the GPS module retain its data between power cycles</li>
+    <li>🌡️ <strong>Environmental Monitoring:</strong> BME280 temperature, humidity, and pressure readings</li>
+    <li>📱 <strong>Connectivity:</strong> Wi-Fi setup and clock settings through a browser</li>
+    <li>🔆 <strong>Adaptive Display:</strong> Automatic brightness with optional display-off-in-dark behavior</li>
   </ul>
 </div>
 
-<h2>⚠️ Important Notice</h2>
-<div style="background-color: #fff3cd; padding: 10px; border-radius: 5px; border-left: 5px solid #ffeeba;">
-  <strong>❌ DO NOT USE AHT25 SENSOR!</strong><br>
-  Due to significant accuracy issues, we recommend using BME280/BMP280/TMP117 instead.
-</div> <br>
 <strong>🔋 GPS Battery Modification</strong>
 <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 10px;">
   <h4>⚠️ Known Issue with GPS Module's Internal Battery</h4>
