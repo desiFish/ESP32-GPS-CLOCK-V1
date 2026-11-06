@@ -66,7 +66,7 @@
 Preferences pref;
 
 // Software version
-#define SWVersion "v2.0.1"
+#define SWVersion "v2.1.0"
 
 // --- Async Web Server ---
 AsyncWebServer server(80);
@@ -78,8 +78,8 @@ TinyGPSPlus gps;
 #define wifiButtonPin 26 // WiFi toggle button pin
 
 static bool wifiEnabled; // WiFi state variable (initialized from preferences)
-volatile bool restartPending = false;
-volatile unsigned long restartAt = 0;
+volatile bool rebootRequested = false;
+volatile unsigned long rebootAt = 0;
 
 const bool DEBUG_LIST_LITTLEFS = false;
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
@@ -100,73 +100,127 @@ void waitForWifiButtonRelease()
   delay(50);
 }
 
-void restartWhenReady()
+void scheduleReboot(unsigned long delayMs)
 {
-  if (restartPending && (long)(millis() - restartAt) >= 0)
+  rebootAt = millis() + delayMs;
+  rebootRequested = true;
+}
+
+void handleScheduledReboot()
+{
+  if (rebootRequested && (long)(millis() - rebootAt) >= 0)
+  {
+    rebootRequested = false;
     ESP.restart();
+  }
 }
 
 // --- Config state variables ---
 static bool buzzerOn = false;
 static bool displayOffInDark = false;
-// --- Config file paths ---
-const char *BUZZER_FILE = "/buzzer.json";
-const char *DISPLAY_DARK_FILE = "/display_dark.json";
+static uint8_t minimumBrightness = 70;
+static bool hour12Mode = true;
+static int32_t timezoneOffsetSeconds = 19800;
+const uint8_t MINIMUM_BRIGHTNESS_LIMIT = 40;
+const uint8_t MAXIMUM_BRIGHTNESS_LIMIT = 255;
+const int32_t MINIMUM_TIMEZONE_OFFSET_SECONDS = -43200;
+const int32_t MAXIMUM_TIMEZONE_OFFSET_SECONDS = 50400;
+const unsigned long WIFI_RESET_HOLD_MS = 10000;
+const char *DISPLAY_DARK_PREF_KEY = "dark_off";
+const char *MINIMUM_BRIGHTNESS_PREF_KEY = "min_bright";
+void simpleBeep(int numBeeps, int duration_ms);
 
 // Time related
 time_t currentEpoch;
 struct tm timeinfo;
 
-// --- Config load/save helpers ---
-void loadConfig()
+// --- Preferences config helpers ---
+void loadPreferencesConfig()
 {
-  // Buzzer
-  if (LittleFS.exists(BUZZER_FILE))
-  {
-    File f = LittleFS.open(BUZZER_FILE, "r");
-    if (f)
-    {
-      DynamicJsonDocument doc(64);
-      if (deserializeJson(doc, f) == DeserializationError::Ok && doc["on"].is<bool>())
-        buzzerOn = doc["on"];
-      f.close();
-    }
-  }
-  // Display Off in Dark
-  if (LittleFS.exists(DISPLAY_DARK_FILE))
-  {
-    File f = LittleFS.open(DISPLAY_DARK_FILE, "r");
-    if (f)
-    {
-      DynamicJsonDocument doc(64);
-      if (deserializeJson(doc, f) == DeserializationError::Ok && doc["enabled"].is<bool>())
-        displayOffInDark = doc["enabled"];
-      f.close();
-    }
-  }
+  buzzerOn = pref.getBool("buzzer_on", false);
+  displayOffInDark = pref.getBool(DISPLAY_DARK_PREF_KEY, false);
+  hour12Mode = !pref.getBool("hour24", false);
+  timezoneOffsetSeconds = pref.getInt("tz_offset", 19800);
+  if (timezoneOffsetSeconds < MINIMUM_TIMEZONE_OFFSET_SECONDS ||
+      timezoneOffsetSeconds > MAXIMUM_TIMEZONE_OFFSET_SECONDS ||
+      timezoneOffsetSeconds % 60 != 0)
+    timezoneOffsetSeconds = 19800;
+
+  uint8_t storedBrightness = pref.getUChar(MINIMUM_BRIGHTNESS_PREF_KEY, minimumBrightness);
+  if (storedBrightness >= MINIMUM_BRIGHTNESS_LIMIT && storedBrightness <= MAXIMUM_BRIGHTNESS_LIMIT)
+    minimumBrightness = storedBrightness;
 }
 
-void saveBuzzerConfig()
+bool saveBuzzerConfig(bool enabled)
 {
-  File f = LittleFS.open(BUZZER_FILE, "w");
-  if (f)
-  {
-    DynamicJsonDocument doc(16);
-    doc["on"] = buzzerOn;
-    serializeJson(doc, f);
-    f.close();
-  }
+  Preferences configPref;
+  if (!configPref.begin("database", false))
+    return false;
+  bool saved = configPref.putBool("buzzer_on", enabled) == 1;
+  configPref.end();
+  return saved;
 }
-void saveDisplayDarkConfig()
+
+bool collectJsonRequestBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
-  File f = LittleFS.open(DISPLAY_DARK_FILE, "w");
-  if (f)
+  if (index == 0)
   {
-    DynamicJsonDocument doc(16);
-    doc["enabled"] = displayOffInDark;
-    serializeJson(doc, f);
-    f.close();
+    if (total == 0 || total > 128)
+    {
+      request->send(total > 128 ? 413 : 400, "application/json", "{\"error\":\"Invalid request body size\"}");
+      return false;
+    }
+    request->_tempObject = malloc(total + 1);
+    if (!request->_tempObject)
+    {
+      request->send(500, "application/json", "{\"error\":\"Could not read request body\"}");
+      return false;
+    }
   }
+
+  if (!request->_tempObject || index > total || len > total - index)
+  {
+    if (request->_tempObject)
+    {
+      free(request->_tempObject);
+      request->_tempObject = nullptr;
+    }
+    request->send(400, "application/json", "{\"error\":\"Invalid request body\"}");
+    return false;
+  }
+
+  memcpy(static_cast<uint8_t *>(request->_tempObject) + index, data, len);
+  if (index + len < total)
+    return false;
+
+  static_cast<char *>(request->_tempObject)[total] = '\0';
+  return true;
+}
+
+void releaseJsonRequestBody(AsyncWebServerRequest *request)
+{
+  free(request->_tempObject);
+  request->_tempObject = nullptr;
+}
+
+bool saveDisplayDarkConfig(bool enabled)
+{
+  Preferences configPref;
+  if (!configPref.begin("database", false))
+    return false;
+  bool saved = configPref.putBool(DISPLAY_DARK_PREF_KEY, enabled) == 1;
+  configPref.end();
+  return saved;
+}
+
+bool saveMinimumBrightnessConfig(uint8_t value)
+{
+  Preferences configPref;
+  if (!configPref.begin("database", false))
+    return false;
+  bool saved = configPref.putUChar(MINIMUM_BRIGHTNESS_PREF_KEY, value) == 1;
+  configPref.end();
+  return saved;
 }
 
 // Web server setup function
@@ -188,6 +242,87 @@ void setupWebServer()
   server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(200, "text/plain", "OK"); });
 
+  // --- Restore all device settings to defaults and reboot ---
+  server.on("/api/reset", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
+      Preferences configPref;
+      if (!configPref.begin("database", false))
+      {
+        request->send(500, "application/json", "{\"error\":\"Could not open settings\"}");
+        return;
+      }
+      bool cleared = configPref.clear();
+      configPref.end();
+      if (!cleared)
+      {
+        request->send(500, "application/json", "{\"error\":\"Could not reset settings\"}");
+        return;
+      }
+
+      request->send(200, "application/json", "{\"ok\":true,\"rebootInSeconds\":5}");
+      scheduleReboot(5000); });
+
+  // --- Time display and timezone settings API ---
+  server.on("/api/time/settings", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+      DynamicJsonDocument doc(64);
+      doc["mode24"] = !hour12Mode;
+      doc["timezoneOffsetSeconds"] = timezoneOffsetSeconds;
+      String out; serializeJson(doc, out);
+      request->send(200, "application/json", out); });
+  server.on("/api/time/settings", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
+              // Handle the request completion
+            },
+            NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+            {
+      if (!collectJsonRequestBody(request, data, len, index, total))
+        return;
+
+      DynamicJsonDocument doc(64);
+      DeserializationError error = deserializeJson(doc, static_cast<const char *>(request->_tempObject));
+      releaseJsonRequestBody(request);
+      JsonVariantConst mode24Field = doc["mode24"];
+      JsonVariantConst timezoneField = doc["timezoneOffsetSeconds"];
+      if (error != DeserializationError::Ok || !mode24Field.is<bool>() ||
+          !timezoneField.is<int>())
+      {
+        request->send(400, "application/json", "{\"error\":\"Invalid time settings\"}");
+        return;
+      }
+
+      bool mode24 = mode24Field.as<bool>();
+      int32_t offsetSeconds = timezoneField.as<int32_t>();
+      if (offsetSeconds < MINIMUM_TIMEZONE_OFFSET_SECONDS ||
+          offsetSeconds > MAXIMUM_TIMEZONE_OFFSET_SECONDS || offsetSeconds % 60 != 0)
+      {
+        request->send(400, "application/json", "{\"error\":\"Timezone offset must be between -12:00 and +14:00\"}");
+        return;
+      }
+
+      Preferences configPref;
+      if (!configPref.begin("database", false))
+      {
+        request->send(500, "application/json", "{\"error\":\"Could not open settings\"}");
+        return;
+      }
+      bool saved = configPref.putBool("hour24", mode24) == 1 &&
+                   configPref.putInt("tz_offset", offsetSeconds) == sizeof(int32_t);
+      configPref.end();
+      if (!saved)
+      {
+        request->send(500, "application/json", "{\"error\":\"Could not save time settings\"}");
+        return;
+      }
+
+      hour12Mode = !mode24;
+      timezoneOffsetSeconds = offsetSeconds;
+      DynamicJsonDocument responseDoc(64);
+      responseDoc["mode24"] = mode24;
+      responseDoc["timezoneOffsetSeconds"] = timezoneOffsetSeconds;
+      String out; serializeJson(responseDoc, out);
+      request->send(200, "application/json", out); });
+
   // --- Buzzer API (GET/POST, persistent) ---
   server.on("/api/buzzer", HTTP_GET, [](AsyncWebServerRequest *request)
             {
@@ -201,12 +336,20 @@ void setupWebServer()
             },
             NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
             {
-      if (len > 0) {
+      if (!collectJsonRequestBody(request, data, len, index, total))
+        return;
+
+      {
         DynamicJsonDocument doc(32);
-        if (deserializeJson(doc, (const char*)data, len) == DeserializationError::Ok && doc["on"].is<bool>()) {
-          buzzerOn = doc["on"];
-          //digitalWrite(BUZZER_PIN, buzzerOn ? HIGH : LOW);
-          saveBuzzerConfig();
+        DeserializationError error = deserializeJson(doc, static_cast<const char *>(request->_tempObject));
+        releaseJsonRequestBody(request);
+        if (error == DeserializationError::Ok && doc["on"].is<bool>()) {
+          bool enabled = doc["on"];
+          if (!saveBuzzerConfig(enabled)) {
+            request->send(500, "application/json", "{\"error\":\"Could not save buzzer setting\"}");
+            return;
+          }
+          buzzerOn = enabled;
           DynamicJsonDocument resp(16);
           resp["on"] = buzzerOn;
           String out; serializeJson(resp, out);
@@ -214,9 +357,13 @@ void setupWebServer()
         } else {
           request->send(400, "application/json", "{\"error\":\"Invalid data\"}");
         }
-      } else {
-        request->send(400, "application/json", "{\"error\":\"No body\"}");
       } });
+
+  // --- Settings confirmation beep API ---
+  server.on("/api/settings/changed", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
+      simpleBeep(1, 150);
+      request->send(200, "application/json", "{\"ok\":true}"); });
 
   // --- Display Off in Dark API (GET/POST, persistent) ---
   server.on("/api/display/off-in-dark", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -231,11 +378,20 @@ void setupWebServer()
             },
             NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
             {
-      if (len > 0) {
+      if (!collectJsonRequestBody(request, data, len, index, total))
+        return;
+
+      {
         DynamicJsonDocument doc(32);
-        if (deserializeJson(doc, (const char*)data, len) == DeserializationError::Ok && doc["enabled"].is<bool>()) {
-          displayOffInDark = doc["enabled"];
-          saveDisplayDarkConfig();
+        DeserializationError error = deserializeJson(doc, static_cast<const char *>(request->_tempObject));
+        releaseJsonRequestBody(request);
+        if (error == DeserializationError::Ok && doc["enabled"].is<bool>()) {
+          bool enabled = doc["enabled"];
+          if (!saveDisplayDarkConfig(enabled)) {
+            request->send(500, "application/json", "{\"error\":\"Could not save display setting\"}");
+            return;
+          }
+          displayOffInDark = enabled;
           DynamicJsonDocument resp(16);
           resp["enabled"] = displayOffInDark;
           String out; serializeJson(resp, out);
@@ -243,8 +399,47 @@ void setupWebServer()
         } else {
           request->send(400, "application/json", "{\"error\":\"Invalid data\"}");
         }
-      } else {
-        request->send(400, "application/json", "{\"error\":\"No body\"}");
+      } });
+
+  // --- Minimum display brightness API (GET/POST, persistent) ---
+  server.on("/api/display/minimum-brightness", HTTP_GET, [](AsyncWebServerRequest *request)
+            {
+      DynamicJsonDocument doc(16);
+      doc["value"] = minimumBrightness;
+      String out; serializeJson(doc, out);
+      request->send(200, "application/json", out); });
+  server.on("/api/display/minimum-brightness", HTTP_POST, [](AsyncWebServerRequest *request)
+            {
+              // Handle the request completion
+            },
+            NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+            {
+      if (!collectJsonRequestBody(request, data, len, index, total))
+        return;
+
+      {
+        DynamicJsonDocument doc(32);
+        DeserializationError error = deserializeJson(doc, static_cast<const char *>(request->_tempObject));
+        releaseJsonRequestBody(request);
+        JsonVariant valueField = doc["value"];
+        if (error == DeserializationError::Ok && (valueField.is<int>() || valueField.is<unsigned int>())) {
+          int value = doc["value"];
+          if (value < MINIMUM_BRIGHTNESS_LIMIT || value > MAXIMUM_BRIGHTNESS_LIMIT) {
+            request->send(400, "application/json", "{\"error\":\"Brightness must be between 40 and 255\"}");
+            return;
+          }
+          if (!saveMinimumBrightnessConfig(value)) {
+            request->send(500, "application/json", "{\"error\":\"Could not save brightness setting\"}");
+            return;
+          }
+          minimumBrightness = value;
+          DynamicJsonDocument resp(16);
+          resp["value"] = minimumBrightness;
+          String out; serializeJson(resp, out);
+          request->send(200, "application/json", out);
+        } else {
+          request->send(400, "application/json", "{\"error\":\"Invalid data\"}");
+        }
       } });
 
   // --- GPS Info endpoint ---
@@ -321,33 +516,18 @@ void showWifiConnecting(byte dots)
   u8g2.sendBuffer();
 }
 
-void showWifiButtonStage(byte stage)
+void showWifiButtonStatus(bool resetRequested, bool targetWifiEnabled)
 {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_luRS08_tr);
   u8g2.setCursor(1, 10);
-  u8g2.print("RELEASE FOR");
-  u8g2.setCursor(1, 22);
-
-  if (stage == 1)
+  u8g2.print(resetRequested ? "RESETTING WIFI" : (targetWifiEnabled ? "WIFI TURNING ON" : "WIFI TURNING OFF"));
+  u8g2.setCursor(1, 34);
+  u8g2.print("RELEASE TO RESTART");
+  if (resetRequested)
   {
-    u8g2.print("WIFI TOGGLE");
-    u8g2.setCursor(1, 46);
-    u8g2.print("KEEP HOLDING");
-    u8g2.setCursor(1, 58);
-    u8g2.print("FOR WIFI RESET");
-  }
-  else if (stage == 2)
-  {
-    u8g2.print("WIFI RESET");
-    u8g2.setCursor(1, 46);
-    u8g2.print("KEEP HOLDING");
-    u8g2.setCursor(1, 58);
-    u8g2.print("TO IGNORE");
-  }
-  else
-  {
-    u8g2.print("IGNORE ALL");
+    u8g2.setCursor(1, 52);
+    u8g2.print("OPENING WIFI MANAGER");
   }
 
   u8g2.sendBuffer();
@@ -358,100 +538,50 @@ bool handleWifiButton()
   if (!isWifiButtonPressed())
     return false;
 
-  byte count = 0;
-  byte lastStage = 0;
-
+  unsigned long pressStart = millis();
+  bool resetRequested = false;
+  showWifiButtonStatus(false, !wifiEnabled);
   while (isWifiButtonPressed())
   {
-    count++;
-    byte stage = 0;
-
-    if (count > 10 && count < 30)
-      stage = 1;
-    else if (count >= 30 && count < 50)
-      stage = 2;
-    else if (count >= 50)
-      stage = 3;
-
-    if (stage != 0 && stage != lastStage)
+    if (!resetRequested && millis() - pressStart >= WIFI_RESET_HOLD_MS)
     {
-      showWifiButtonStage(stage);
-      lastStage = stage;
+      resetRequested = true;
+      showWifiButtonStatus(true, true);
     }
-
-    restartWhenReady();
-    delay(100);
+    handleScheduledReboot();
+    delay(50);
   }
-
-  if (count < 10)
-    return false;
 
   if (!pref.begin("database", false))
   {
     errorMsgPrint("DATABASE", "ERROR INITIALIZE");
-    delay(100);
     return true;
   }
 
-  bool restartRequired = false;
-  if (count < 30)
+  if (resetRequested)
   {
-    wifiEnabled = !wifiEnabled;
-    pref.putBool("wifi_enabled", wifiEnabled);
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_luRS08_tr);
-    u8g2.setCursor(1, 20);
-
-    if (wifiEnabled)
+    Serial.println("Device settings reset - Restarting ESP32...");
+    if (!pref.clear())
     {
-      Serial.println("WiFi Enabled - Restarting ESP32...");
-      u8g2.print("CONNECTING WIFI");
-      u8g2.setCursor(1, 32);
-      u8g2.print("RESTARTING");
-      restartRequired = true;
+      pref.end();
+      errorMsgPrint("RESET", "FAILED");
+      return true;
     }
-    else
-    {
-      server.end();
-      WiFi.disconnect(true);
-      WiFi.mode(WIFI_OFF);
-      Serial.println("WiFi Disabled");
-      u8g2.print("WIFI DISABLED");
-    }
-    u8g2.sendBuffer();
-  }
-  else if (count < 50)
-  {
-    Serial.println("WiFi Reset - Restarting ESP32...");
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_luRS08_tr);
-    u8g2.setCursor(1, 20);
-    u8g2.print("RESETTING WIFI");
-    u8g2.setCursor(1, 32);
-    u8g2.print("RESTARTING");
-    u8g2.sendBuffer();
-    pref.putString("ssid", "");
-    pref.putString("password", "");
-    restartRequired = true;
+    ssid = "";
+    password = "";
+    wifiEnabled = true;
+    showWifiButtonStatus(true, true);
   }
   else
   {
-    Serial.println("Ignoring Switch");
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_luRS08_tr);
-    u8g2.setCursor(1, 20);
-    u8g2.print("IGNORING WIFI");
-    u8g2.setCursor(1, 32);
-    u8g2.print("TOGGLE/RESET");
-    u8g2.sendBuffer();
+    wifiEnabled = !wifiEnabled;
+    pref.putBool("wifi_enabled", wifiEnabled);
+    Serial.println(wifiEnabled ? "WiFi Enabled - Restarting ESP32..." : "WiFi Disabled - Restarting ESP32...");
+    showWifiButtonStatus(false, wifiEnabled);
   }
 
   pref.end();
-  if (restartRequired)
-  {
-    restartPending = true;
-    restartAt = millis() + 1500;
-  }
+  scheduleReboot(1500);
 
   return true;
 }
@@ -491,7 +621,7 @@ void makeDateString(char *buffer, size_t length)
   snprintf(buffer, length, "%u%s %s %04d", days, daySuffix(days), monthName, years);
 }
 
-bool isDark, hour12Mode = true; // Tracks ambient light state
+bool isDark; // Tracks ambient light state
 
 // LUX (BH1750) update frequency
 unsigned long lastLightRead = 0;
@@ -514,10 +644,6 @@ byte currentBrightness = 250; // Track current brightness level
 const int pwmChannel = 0;    // PWM channel 0–15
 const int pwmFreq = 5000;    // PWM frequency in Hz
 const int pwmResolution = 8; // 8-bit resolution (0–255)
-
-const int BUZZER_CHANNEL = 1;
-const int PWM_FREQ = 2700; // default tone frequency
-const int PWM_RES = 8;     // 8-bit resolution
 
 float lux = 0;
 byte targetBrightness = 0;
@@ -610,6 +736,10 @@ void onOTAEnd(bool success)
 void setup()
 {
   Serial.begin(115200);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+  simpleBeep(1, 150);
+
   Serial.println("Start");
   Wire.begin();
   Serial1.begin(9600, SERIAL_8N1, RXPin, TXPin);
@@ -621,10 +751,6 @@ void setup()
   pinMode(LCD_LIGHT, OUTPUT);
   pinMode(lcdEnablePin, OUTPUT);
   digitalWrite(lcdEnablePin, HIGH);
-  pinMode(BUZZER_PIN, OUTPUT);
-
-  // Attach buzzer to PWM channel
-  ledcAttachChannel(BUZZER_PIN, PWM_FREQ, PWM_RES, BUZZER_CHANNEL);
   // Setup ESP32 PWM for backlight
   ledcAttachChannel(LCD_LIGHT, pwmFreq, pwmResolution, pwmChannel);
   ledcWrite(LCD_LIGHT, 250);
@@ -709,7 +835,7 @@ void setup()
     }
   }
 
-  loadConfig(); // <-- Load config from LittleFS before anything else
+  loadPreferencesConfig();
 
   if (wifiEnabled)
   {
@@ -753,6 +879,9 @@ void setup()
           request->send(404, "text/plain", "wifimanager.html not found. Upload the data folder to LittleFS.");
         } });
 
+      server.on("/api/version", HTTP_GET, [](AsyncWebServerRequest *request)
+                { request->send(200, "text/plain", SWVersion); });
+
       server.on("/wifi", HTTP_POST, [](AsyncWebServerRequest *request)
                 {
         int params = request->params();
@@ -779,13 +908,12 @@ void setup()
           }
         }
         request->send(200, "text/plain", "Done. Device will now restart.");
-        restartPending = true;
-        restartAt = millis() + 1000; });
+        scheduleReboot(1000); });
       server.begin();
       WiFi.onEvent(WiFiEvent);
       while (true)
       {
-        restartWhenReady();
+        handleScheduledReboot();
         delay(50);
         if (isWifiButtonPressed())
         {
@@ -885,16 +1013,6 @@ void setup()
   pref.end();
   // Wifi related stuff END
 
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_7x14B_mr);
-  u8g2.setCursor(44, 30);
-  u8g2.print("HELLO!");
-  u8g2.setCursor(36, 52);
-  u8g2.print("NINI");
-  u8g2.setFont(u8g2_font_streamline_food_drink_t);
-  u8g2.drawUTF8(80, 54, "U+4"); // birthday cake icon
-  u8g2.sendBuffer();
-  delay(1500);
   xTaskCreatePinnedToCore(
       loop1,       // Task function.
       "loop1Task", // name of task.
@@ -948,7 +1066,7 @@ void loop1(void *pvParameters)
 
         // Map lux to target brightness
         byte val1 = constrain(lux, 1, 120);
-        targetBrightness = map(val1, 1, 120, 40, 255);
+        targetBrightness = map(val1, 1, 120, minimumBrightness, 255);
 
         if (DEBUG_LIST_LITTLEFS)
         {
@@ -1041,7 +1159,7 @@ void loop1(void *pvParameters)
             Serial.println(alarmMinute);
           }
 
-          simpleBeep(beeps, 500, 255);
+          simpleBeep(beeps, 500);
           alarmTriggered = true;
         }
       }
@@ -1070,7 +1188,7 @@ void loop(void)
 { // used for blinking ":" in time (for display)
   static bool pulse = true;
   static bool wasInDarkMode = false;
-  restartWhenReady();
+  handleScheduledReboot();
   bool wifiConnected = WiFi.status() == WL_CONNECTED;
   if (wifiConnected)
     ElegantOTA.loop();
@@ -1121,8 +1239,8 @@ void loop(void)
         // Convert to epoch (UTC)
         time_t t = mktime(&tmUTC);
 
-        // Apply IST offset (+5:30 → 19800 seconds)
-        t += 19800;
+        // Apply the configured local UTC offset.
+        t += timezoneOffsetSeconds;
 
         // Save epoch and also convert to broken-down local time
         currentEpoch = t;
@@ -1335,29 +1453,17 @@ static void smartDelay(unsigned long ms)
  * @brief Generate simple beeps using the buzzer
  * @param numBeeps Number of beeps to generate
  * @param duration_ms Duration of each beep in milliseconds
- * @param maxVolume Maximum volume level (0-255)
  */
-void simpleBeep(int numBeeps, int duration_ms, byte maxVolume)
+void simpleBeep(int numBeeps, int duration_ms)
 {
-  int pauseTime = 150; // pause between double beeps
-
-  if (maxVolume > 255)
-    maxVolume = 255;
+  const int pauseTime = 150;
 
   for (int b = 0; b < numBeeps; b++)
   {
-    // Turn on buzzer at maxVolume
-    ledcWriteTone(BUZZER_PIN, PWM_FREQ);
-    ledcWrite(BUZZER_PIN, maxVolume);
-
-    // Hold for the specified duration
+    digitalWrite(BUZZER_PIN, HIGH);
     delay(duration_ms);
+    digitalWrite(BUZZER_PIN, LOW);
 
-    // Turn off buzzer
-    ledcWriteTone(BUZZER_PIN, 0);
-    ledcWrite(BUZZER_PIN, 0);
-
-    // Pause between beeps
     if (b < numBeeps - 1)
       delay(pauseTime);
   }

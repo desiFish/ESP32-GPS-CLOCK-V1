@@ -8,142 +8,260 @@
     <link rel="icon" type="image/png" href="/favicon.png">
     <style>
         :root {
-            --primary: #2196f3;
-            --accent: #ff9800;
-            --bg: #181818;
-            --surface: #232323;
-            --card: #222;
-            --text: #fff;
-            --text-secondary: #b0b0b0;
-            --success: #4caf50;
-            --error: #f44336;
-            --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            color-scheme: dark;
+            --primary: #d7b477;
+            --primary-soft: rgba(215, 180, 119, .13);
+            --bg: #111310;
+            --surface: #191c18;
+            --card: #20241f;
+            --card-raised: #252a24;
+            --text: #f2f0e9;
+            --text-secondary: #a7aaa0;
+            --success: #8ac99a;
+            --error: #ed8d82;
+            --line: rgba(242, 240, 233, .09);
+            --shadow: 0 18px 48px rgba(0, 0, 0, .22);
         }
 
-        html,
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            background: var(--bg);
+            background: radial-gradient(ellipse at 50% -18%, rgba(215, 180, 119, .10), transparent 55%), var(--bg);
             color: var(--text);
-            font-family: 'Roboto', Arial, sans-serif;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             margin: 0;
-            padding: 0;
             min-height: 100vh;
+            padding: 48px 20px 24px;
         }
 
         .container {
-            max-width: 420px;
-            margin: 40px auto 0 auto;
-            padding: 24px;
-            background: var(--surface);
-            border-radius: 18px;
+            width: min(100%, 900px);
+            margin: 0 auto;
+            padding: clamp(24px, 5vw, 48px);
+            padding-bottom: 8px;
+            background: rgba(25, 28, 24, .92);
+            border: 1px solid var(--line);
+            border-radius: 28px;
             box-shadow: var(--shadow);
-            text-align: center;
+        }
+
+        .page-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 24px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid var(--line);
         }
 
         h1 {
-            font-size: 2.2rem;
-            font-weight: 700;
-            margin-bottom: 0.5em;
-            letter-spacing: 1px;
+            margin: 0;
+            font-size: clamp(1.7rem, 5vw, 2.35rem);
+            font-weight: 650;
+            letter-spacing: -.045em;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin: 9px 0 0;
+            font-size: .95rem;
+        }
+
+        .status {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 9px 13px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, .025);
+            font-size: .8rem;
+            font-weight: 600;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--error);
+            box-shadow: 0 0 10px rgba(237, 141, 130, .45);
+            transition: background .2s, box-shadow .2s;
+        }
+
+        .dot.online {
+            background: var(--success);
+            box-shadow: 0 0 10px rgba(138, 201, 154, .5);
+        }
+
+        .navigation {
+            display: flex;
+            gap: 10px;
+            padding: 22px 0 28px;
+        }
+
+        .mat-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 42px;
+            padding: 0 16px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            color: var(--text);
+            background: rgba(255, 255, 255, .035);
+            font: inherit;
+            font-size: .85rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: border-color .2s, background .2s, transform .2s;
+        }
+
+        .mat-btn:hover {
+            border-color: rgba(215, 180, 119, .45);
+            background: var(--primary-soft);
+            transform: translateY(-1px);
         }
 
         .card {
             background: var(--card);
-            border-radius: 14px;
-            box-shadow: var(--shadow);
-            padding: 2em 1.2em 1.5em 1.2em;
-            margin-bottom: 2em;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-start;
+            gap: 12px;
+            transition: background .2s, border-color .2s;
+        }
+
+        .card:hover {
+            background: var(--card-raised);
+            border-color: rgba(242, 240, 233, .14);
         }
 
         .card-title {
-            font-size: 1.2rem;
-            color: var(--text-secondary);
-            margin-bottom: 1.2em;
-            font-weight: 500;
+            margin: 0 0 8px;
+            font-size: 1rem;
+            font-weight: 620;
+            letter-spacing: -.015em;
         }
 
         .sys-row {
             display: flex;
             align-items: center;
-            justify-content: flex-start;
+            justify-content: space-between;
+            gap: 14px;
             width: 100%;
-            margin-bottom: 1.1em;
-            font-size: 1.1rem;
+            padding: 13px 0;
+            border-bottom: 1px solid var(--line);
+            font-size: .9rem;
+        }
+
+        .sys-row:last-of-type {
+            border-bottom: 0;
         }
 
         .sys-icon {
-            font-size: 1.5em;
-            margin-right: 0.7em;
-            width: 1.7em;
-            text-align: center;
+            width: 24px;
+            color: var(--primary);
+            font-size: 1.1rem;
         }
 
         .sys-label {
             color: var(--text-secondary);
-            min-width: 120px;
-            text-align: left;
         }
 
         .sys-value {
             font-weight: 600;
             margin-left: auto;
             text-align: right;
+            font-variant-numeric: tabular-nums;
         }
 
-        .mat-btn {
-            background: var(--primary);
-            color: #fff;
-            border: none;
-            border-radius: 24px;
-            padding: 0.8em 2.2em;
-            font-size: 1.1rem;
-            font-weight: 500;
-            box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
-            cursor: pointer;
-            margin-top: 1.5em;
-            transition: background 0.2s, box-shadow 0.2s;
-            outline: none;
+        footer {
+            padding: 12px 8px 0;
+            color: var(--text-secondary);
+            font-size: .78rem;
+            line-height: 1.6;
+            text-align: center;
         }
 
-        .mat-btn:active {
-            background: var(--accent);
-            box-shadow: 0 1px 4px rgba(255, 152, 0, 0.18);
-        }
-
-        .status {
-            display: inline-flex;
+        .footer-meta {
+            display: flex;
             align-items: center;
-            font-size: 1.1rem;
-            margin-bottom: 2.2em;
-            font-weight: 500;
-            letter-spacing: 0.5px;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 7px;
         }
 
-        .dot {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            margin-right: 0.7em;
-            background: var(--error);
-            box-shadow: 0 0 8px 2px var(--error);
-            transition: background 0.3s, box-shadow 0.3s;
+        footer a {
+            color: var(--text);
+            text-decoration: none;
+            transition: color .2s;
         }
 
-        .dot.online {
-            background: var(--success);
-            box-shadow: 0 0 8px 2px var(--success);
+        footer a:hover {
+            color: var(--primary);
         }
 
-        @media (max-width: 600px) {
+        .footer-version {
+            display: inline-block;
+            padding: 4px 10px;
+            border: 1px solid rgba(215, 180, 119, .34);
+            border-radius: 999px;
+            color: var(--primary);
+            background: var(--primary-soft);
+            font-weight: 700;
+            letter-spacing: .025em;
+        }
+
+        .footer-separator {
+            color: rgba(242, 240, 233, .28);
+        }
+
+        .footer-prayer {
+            margin: 8px 0 0;
+            margin-bottom: 0;
+            color: var(--primary);
+            font-family: Georgia, "Noto Serif Devanagari", serif;
+            font-size: .98rem;
+            letter-spacing: .04em;
+        }
+
+        @media (max-width: 620px) {
+            body {
+                padding: 18px 12px;
+            }
+
             .container {
-                padding: 8px;
+                padding: 22px 16px;
+                padding-bottom: 8px;
+                border-radius: 22px;
+            }
+
+            .page-header {
+                flex-direction: column;
+                gap: 18px;
+                padding-bottom: 22px;
+            }
+
+            .navigation {
+                padding: 16px 0 20px;
+            }
+
+            .mat-btn {
+                flex: 1;
+                padding: 0 10px;
+                font-size: .8rem;
             }
 
             .card {
-                padding: 1.2em 0.5em 1em 0.5em;
+                padding: 20px;
             }
         }
     </style>
@@ -151,22 +269,22 @@
 
 <body>
     <div class="container">
-        <h1>Hardware Info</h1>
-        <div class="status">
-            <span id="status-dot" class="dot"></span>
-            <span id="status-text">Checking...</span>
-        </div>
-        <!-- Navigation buttons under status -->
-        <div style="margin-bottom:2em;">
-            <button class="mat-btn" onclick="window.location.href='index.html'">
-                <span style="vertical-align:middle;">&#8962; Home</span>
-            </button>
-            <button class="mat-btn" onclick="window.location.href='gps.html'">
-                <span style="vertical-align:middle;">&#128205; GPS Info</span>
-            </button>
-        </div>
+        <header class="page-header">
+            <div>
+                <h1>Hardware information</h1>
+                <p class="subtitle">Device and system details.</p>
+            </div>
+            <div class="status" role="status" aria-live="polite">
+                <span id="status-dot" class="dot"></span>
+                <span id="status-text">Checking...</span>
+            </div>
+        </header>
+        <nav class="navigation" aria-label="Device information">
+            <a class="mat-btn" href="index.html">🏠 &nbsp; Home</a>
+            <a class="mat-btn" href="gps.html">⌖ &nbsp; GPS information</a>
+        </nav>
         <div class="card">
-            <div class="card-title">System Details</div>
+            <h2 class="card-title">System details</h2>
             <div class="sys-row">
                 <span class="sys-icon">&#128187;</span>
                 <span class="sys-label">Device</span>
@@ -238,27 +356,41 @@
                 <span class="sys-value" id="sys-core">--</span>
             </div>
         </div>
-        <footer style="margin-top:2em;color:#b0b0b0;font-size:0.95em;">
-            <span id="footer-version">v1.x.x</span> &nbsp;|&nbsp; &copy; 2024-2025 <a
-                href="https://github.com/desiFish/GPS-CLOCK-V1"
-                style="color:#b0b0b0;text-decoration:underline;">desiFish</a>
+        <footer>
+            <div class="footer-meta">
+                <a class="footer-version" id="footer-version" href="https://github.com/desiFish/ESP32-GPS-CLOCK-V1/releases"
+                    target="_blank" rel="noopener noreferrer">--</a>
+                <span class="footer-separator">·</span>
+                <span>&copy; 2024</span>
+                <span class="footer-separator">·</span>
+                <a href="https://github.com/desiFish" target="_blank" rel="noopener noreferrer">desiFish</a>
+                <span class="footer-separator">·</span>
+                <span>Made in India 🇮🇳</span>
+            </div>
+            <p class="footer-prayer">ॐ नमो नारायणाय</p>
         </footer>
     </div>
     <script>
+        fetch('/api/version')
+            .then(r => r.ok ? r.text() : Promise.reject(new Error('Could not fetch version')))
+            .then(version => {
+                document.getElementById('footer-version').textContent = version;
+            })
+            .catch(err => console.error('Error fetching firmware version:', err));
+
         // Status indicator logic (same as index.html)
         function updateStatus() {
-            fetch('/api/status').then(r => {
-                if (r.ok) {
-                    document.getElementById('status-dot').classList.add('online');
-                    document.getElementById('status-text').textContent = 'Online';
-                } else {
-                    document.getElementById('status-dot').classList.remove('online');
-                    document.getElementById('status-text').textContent = 'Offline';
-                }
-            }).catch(_ => {
-                document.getElementById('status-dot').classList.remove('online');
-                document.getElementById('status-text').textContent = 'Offline';
-            });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1200);
+            fetch('/api/status', { signal: controller.signal })
+                .then(response => setStatus(response.ok))
+                .catch(() => setStatus(false))
+                .finally(() => clearTimeout(timeoutId));
+        }
+
+        function setStatus(isOnline) {
+            document.getElementById('status-dot').classList.toggle('online', isOnline);
+            document.getElementById('status-text').textContent = isOnline ? 'Online' : 'Offline';
         }
         setInterval(updateStatus, 3000);
         updateStatus();
@@ -289,15 +421,6 @@
         setInterval(fetchSys, 4000);
         fetchSys();
 
-        // Footer version fetch
-        fetch('/api/version')
-            .then(r => r.ok ? r.text() : Promise.reject())
-            .then(ver => {
-                document.getElementById('footer-version').textContent = ver;
-            })
-            .catch(() => {
-                document.getElementById('footer-version').textContent = 'Error';
-            });
     </script>
 </body>
 

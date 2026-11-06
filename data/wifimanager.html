@@ -125,6 +125,13 @@
     .button-off:hover {
       background-color: #252524;
     }
+
+    footer {
+      margin-top: 2em;
+      padding-bottom: 1em;
+      color: #b0b0b0;
+      font-size: 0.95em;
+    }
   </style>
 </head>
 
@@ -147,6 +154,17 @@
       </div>
     </div>
   </div>
+  <footer>
+    <span id="footer-version">--</span> &copy; 2024 desiFish | Made in India 🇮🇳 | ॐ नमो नारायणाय
+  </footer>
+  <script>
+    fetch('/api/version')
+      .then(r => r.ok ? r.text() : Promise.reject(new Error('Could not fetch version')))
+      .then(version => {
+        document.getElementById('footer-version').textContent = version;
+      })
+      .catch(err => console.error('Error fetching firmware version:', err));
+  </script>
 </body>
 
 </html>

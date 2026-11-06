@@ -5,3 +5,8 @@ global.exe
 *.bin
 *.elf
 *.map
+build/esp32.esp32.esp32/partitions.csv
+build/esp32.esp32.esp32/build.options.json
+build/esp32.esp32.esp32/sdkconfig
+build/esp32.esp32.esp32/flash_args
+.gitignore

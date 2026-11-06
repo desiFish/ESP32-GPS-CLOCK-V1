@@ -8,93 +8,182 @@
     <link rel="icon" type="image/png" href="/favicon.png">
     <style>
         :root {
-            --primary: #2196f3;
-            --accent: #ff9800;
-            --bg: #181818;
-            --surface: #232323;
-            --card: #222;
-            --text: #fff;
-            --text-secondary: #b0b0b0;
-            --success: #4caf50;
-            --error: #f44336;
-            --shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            color-scheme: dark;
+            --primary: #d7b477;
+            --primary-soft: rgba(215, 180, 119, .13);
+            --bg: #111310;
+            --surface: #191c18;
+            --card: #20241f;
+            --card-raised: #252a24;
+            --text: #f2f0e9;
+            --text-secondary: #a7aaa0;
+            --success: #8ac99a;
+            --error: #ed8d82;
+            --line: rgba(242, 240, 233, .09);
+            --shadow: 0 18px 48px rgba(0, 0, 0, .22);
         }
 
-        html,
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            background: var(--bg);
+            background:
+                radial-gradient(ellipse at 50% -18%, rgba(215, 180, 119, .10), transparent 55%),
+                var(--bg);
             color: var(--text);
-            font-family: 'Roboto', Arial, sans-serif;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             margin: 0;
-            padding: 0;
             min-height: 100vh;
+            padding: 48px 20px 24px;
         }
 
         .container {
-            max-width: 420px;
-            margin: 40px auto 0 auto;
-            padding: 24px;
-            background: var(--surface);
-            border-radius: 18px;
+            width: min(100%, 900px);
+            margin: 0 auto;
+            padding: clamp(24px, 5vw, 48px);
+            padding-bottom: 8px;
+            background: rgba(25, 28, 24, .92);
+            border: 1px solid var(--line);
+            border-radius: 28px;
             box-shadow: var(--shadow);
-            text-align: center;
+        }
+
+        .page-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 24px;
+            padding-bottom: 30px;
+            border-bottom: 1px solid var(--line);
         }
 
         h1 {
-            font-size: 2.2rem;
-            font-weight: 700;
-            margin-bottom: 0.5em;
-            letter-spacing: 1px;
+            margin: 0;
+            font-size: clamp(1.7rem, 5vw, 2.35rem);
+            font-weight: 650;
+            letter-spacing: -.045em;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            margin: 9px 0 0;
+            font-size: .95rem;
         }
 
         .status {
+            flex: 0 0 auto;
             display: inline-flex;
             align-items: center;
-            font-size: 1.1rem;
-            margin-bottom: 2.2em;
-            font-weight: 500;
-            letter-spacing: 0.5px;
+            gap: 9px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 9px 13px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, .025);
+            font-size: .8rem;
+            font-weight: 600;
         }
 
         .dot {
-            width: 14px;
-            height: 14px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            margin-right: 0.7em;
             background: var(--error);
-            box-shadow: 0 0 8px 2px var(--error);
-            transition: background 0.3s, box-shadow 0.3s;
+            box-shadow: 0 0 10px rgba(237, 141, 130, .45);
+            transition: background .2s, box-shadow .2s;
         }
 
         .dot.online {
             background: var(--success);
-            box-shadow: 0 0 8px 2px var(--success);
+            box-shadow: 0 0 10px rgba(138, 201, 154, .5);
+        }
+
+        .navigation {
+            display: flex;
+            gap: 10px;
+            padding: 22px 0 28px;
+        }
+
+        .mat-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 42px;
+            padding: 0 16px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            color: var(--text);
+            background: rgba(255, 255, 255, .035);
+            font: inherit;
+            font-size: .85rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: border-color .2s, background .2s, transform .2s;
+        }
+
+        .mat-btn:hover {
+            border-color: rgba(215, 180, 119, .45);
+            background: var(--primary-soft);
+            transform: translateY(-1px);
+        }
+
+        .danger-btn {
+            border-color: rgba(237, 141, 130, .35);
+            color: var(--error);
+        }
+
+        .danger-btn:hover {
+            border-color: var(--error);
+            background: rgba(237, 141, 130, .10);
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
         }
 
         .card {
+            min-height: 205px;
             background: var(--card);
-            border-radius: 14px;
-            box-shadow: var(--shadow);
-            padding: 2em 1.2em 1.5em 1.2em;
-            margin-bottom: 2em;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 24px;
+            transition: background .2s, border-color .2s;
+        }
+
+        .card:hover {
+            background: var(--card-raised);
+            border-color: rgba(242, 240, 233, .14);
         }
 
         .card-title {
-            font-size: 1.2rem;
-            color: var(--text-secondary);
-            margin-bottom: 1.2em;
-            font-weight: 500;
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 620;
+            letter-spacing: -.015em;
         }
 
-        /* Material Switch */
+        .card-description {
+            margin: 7px 0 0;
+            color: var(--text-secondary);
+            font-size: .83rem;
+            line-height: 1.5;
+        }
+
         .switch {
             position: relative;
             display: inline-block;
-            width: 54px;
-            height: 32px;
+            width: 48px;
+            height: 28px;
+            flex: 0 0 auto;
         }
 
         .switch input {
@@ -110,22 +199,21 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: #444;
-            transition: background 0.3s;
-            border-radius: 32px;
+            background: #454a43;
+            transition: background .2s;
+            border-radius: 99px;
         }
 
         .slider:before {
             position: absolute;
             content: "";
-            height: 24px;
-            width: 24px;
+            height: 20px;
+            width: 20px;
             left: 4px;
             bottom: 4px;
-            background: var(--primary);
-            transition: transform 0.3s, background 0.3s;
+            background: #d8d9d2;
+            transition: transform .2s, background .2s;
             border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
         }
 
         input:checked+.slider {
@@ -133,51 +221,168 @@
         }
 
         input:checked+.slider:before {
-            transform: translateX(22px);
-            background: var(--accent);
+            transform: translateX(20px);
+            background: #171913;
+        }
+
+        .switch input:focus-visible+.slider {
+            outline: 2px solid var(--text);
+            outline-offset: 3px;
+        }
+
+        .control-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
         }
 
         .switch-label {
-            margin-left: 1em;
-            font-size: 1.1rem;
-            vertical-align: middle;
-        }
-
-        /* Material Button */
-        .mat-btn {
-            background: var(--primary);
-            color: #fff;
-            border: none;
-            border-radius: 24px;
-            padding: 0.8em 2.2em;
-            font-size: 1.1rem;
-            font-weight: 500;
-            box-shadow: 0 2px 8px rgba(33, 150, 243, 0.15);
-            cursor: pointer;
-            margin-top: 1.5em;
-            transition: background 0.2s, box-shadow 0.2s;
-            outline: none;
-        }
-
-        .mat-btn:active {
-            background: var(--accent);
-            box-shadow: 0 1px 4px rgba(255, 152, 0, 0.18);
+            margin-top: 10px;
+            color: var(--text-secondary);
+            font-size: .8rem;
         }
 
         .switch-label-center {
-            display: block;
-            margin-left: 0;
-            margin-top: 0.7em;
+            color: var(--primary);
+            font-variant-numeric: tabular-nums;
+            font-size: .86rem;
+            font-weight: 650;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 5px;
+            margin: 3px 0;
+            border-radius: 99px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        input[type="range"]:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 7px;
+        }
+
+        .card-help {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: .78rem;
+            line-height: 1.5;
+        }
+
+        .card-help-note {
+            margin-top: -16px;
+            font-size: .58rem;
+            opacity: .58;
+        }
+
+        .text-input {
+            width: 100%;
+            min-height: 44px;
+            padding: 0 12px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            color: var(--text);
+            background: rgba(0, 0, 0, .16);
+            font: inherit;
+        }
+
+        .text-input:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .card-help a {
+            color: var(--primary);
+            text-underline-offset: 3px;
+        }
+
+        footer {
+            padding: 12px 8px 0;
+            color: var(--text-secondary);
+            font-size: .78rem;
+            line-height: 1.6;
             text-align: center;
         }
 
-        @media (max-width: 600px) {
+        .footer-meta {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 7px;
+        }
+
+        footer a {
+            color: var(--text);
+            text-decoration: none;
+            transition: color .2s;
+        }
+
+        footer a:hover {
+            color: var(--primary);
+        }
+
+        .footer-version {
+            display: inline-block;
+            padding: 4px 10px;
+            border: 1px solid rgba(215, 180, 119, .34);
+            border-radius: 999px;
+            color: var(--primary);
+            background: var(--primary-soft);
+            font-weight: 700;
+            letter-spacing: .025em;
+        }
+
+        .footer-separator {
+            color: rgba(242, 240, 233, .28);
+        }
+
+        .footer-prayer {
+            margin: 8px 0 0;
+            margin-bottom: 0;
+            color: var(--primary);
+            font-family: Georgia, "Noto Serif Devanagari", serif;
+            font-size: .98rem;
+            letter-spacing: .04em;
+        }
+
+        @media (max-width: 620px) {
+            body {
+                padding: 18px 12px;
+            }
+
             .container {
-                padding: 8px;
+                padding: 22px 16px;
+                padding-bottom: 8px;
+                border-radius: 22px;
+            }
+
+            .page-header {
+                flex-direction: column;
+                gap: 18px;
+                padding-bottom: 22px;
+            }
+
+            .navigation {
+                padding: 16px 0 20px;
+            }
+
+            .mat-btn {
+                flex: 1;
+                padding: 0 10px;
+                font-size: .8rem;
+            }
+
+            .settings-grid {
+                grid-template-columns: 1fr;
             }
 
             .card {
-                padding: 1.2em 0.5em 1em 0.5em;
+                min-height: 170px;
+                padding: 20px;
             }
         }
     </style>
@@ -185,67 +390,140 @@
 
 <body>
     <div class="container">
-        <h1>GPS CLOCK V1</h1>
-        <div class="status">
-            <span id="status-dot" class="dot"></span>
-            <span id="status-text">Checking...</span>
-        </div>
-        <!-- Navigation buttons under status -->
-        <div style="margin-bottom:2em;">
-            <button class="mat-btn" onclick="window.location.href='gps.html'">
-                <span style="vertical-align:middle;">&#128205; GPS Info</span>
-            </button>
-            <button class="mat-btn" onclick="window.location.href='hardware.html'">
-                <span style="vertical-align:middle;">&#9881;&#65039; Hardware Info</span>
-            </button>
-        </div>
-        <div style="height:2.5em;"></div>
-        <div class="card">
-            <div class="card-title">Buzzer Control</div>
-            <label class="switch">
-                <input type="checkbox" id="buzzer-switch">
-                <span class="slider"></span>
-            </label>
-            <div class="switch-label switch-label-center" id="buzzer-label">Buzzer OFF</div>
-        </div>
+        <header class="page-header">
+            <div>
+                <h1>GPS Clock V1</h1>
+                <p class="subtitle">Manage your display and chime preferences.</p>
+            </div>
+            <div class="status" role="status" aria-live="polite">
+                <span id="status-dot" class="dot"></span>
+                <span id="status-text">Checking...</span>
+            </div>
+        </header>
+        <nav class="navigation" aria-label="Device information">
+            <a class="mat-btn" href="gps.html">⌖ &nbsp; GPS information</a>
+            <a class="mat-btn" href="hardware.html">⚙ &nbsp; Hardware</a>
+        </nav>
+        <div class="settings-grid">
+        <section class="card">
+            <div>
+                <h2 class="card-title">Hourly chime</h2>
+                <p class="card-description">Play a chime on the hour and half-hour.</p>
+            </div>
+            <div>
+                <div class="control-row">
+                    <span class="switch-label" id="buzzer-label">Buzzer OFF</span>
+                    <label class="switch" aria-label="Enable hourly chime">
+                        <input type="checkbox" id="buzzer-switch">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </section>
+        <section class="card">
+            <div>
+                <h2 class="card-title">24-hour time</h2>
+                <p class="card-description">Show the clock in 24-hour format instead of AM/PM.</p>
+            </div>
+            <div class="control-row">
+                <span class="switch-label" id="time-format-label">12-hour</span>
+                <label class="switch" aria-label="Use 24-hour time">
+                    <input type="checkbox" id="time-format-switch">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </section>
+        <section class="card">
+            <div>
+                <h2 class="card-title">Timezone</h2>
+                <p class="card-description">Enter your local UTC offset, for example <strong>+5:30</strong> for IST (Indian Standard Time).</p>
+            </div>
+            <label class="card-help" for="timezone-offset">UTC offset (±HH:MM)</label>
+            <input class="text-input" id="timezone-offset" type="text" inputmode="text" maxlength="6"
+                placeholder="+5:30" aria-label="UTC timezone offset">
+            <p class="card-help">
+                Find your offset at
+                <a href="https://www.timeanddate.com/time/zones/" target="_blank" rel="noopener noreferrer">timeanddate.com</a>.
+            </p>
+            <p class="card-help card-help-note">Daylight saving time (DST) is not supported; this fixed UTC offset does not change seasonally.</p>
+            <button class="mat-btn" id="save-timezone" type="button">Save timezone</button>
+            <p class="card-help" id="timezone-message" role="status" aria-live="polite"></p>
+        </section>
+        <section class="card">
+            <div>
+                <h2 class="card-title">Minimum display brightness</h2>
+                <p class="card-description">Set the lower limit used by automatic brightness.</p>
+            </div>
+            <input type="range" id="minimum-brightness" min="40" max="255" step="5" value="70"
+                aria-label="Minimum display brightness">
+            <div class="control-row">
+                <span class="card-help">Brightness floor</span>
+                <span class="switch-label-center" id="minimum-brightness-label">70 / 255</span>
+            </div>
+            <p class="card-help">
+                Raise this value if the display looks dim in low or moderate room light.
+            </p>
+        </section>
 
-        <!-- Display Off in Dark Card -->
-        <div class="card">
-            <div class="card-title">Display Off in Dark</div>
-            <label class="switch">
-                <input type="checkbox" id="display-dark-switch">
-                <span class="slider"></span>
-            </label>
-            <label class="switch-label-center" id="display-dark-label">OFF</label>
-
-            <!-- Deep sleep card removed -->
+        <section class="card">
+            <div>
+                <h2 class="card-title">Display off in darkness</h2>
+                <p class="card-description">Turn off the display when ambient light is very low.</p>
+            </div>
+            <div class="control-row">
+                <span class="switch-label-center" id="display-dark-label">Disabled</span>
+                <label class="switch" aria-label="Turn display off in darkness">
+                    <input type="checkbox" id="display-dark-switch">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </section>
+        <section class="card">
+            <div>
+                <h2 class="card-title">Reset device</h2>
+                <p class="card-description">Restore settings and Wi-Fi credentials to their defaults. The device will restart and open Wi-Fi Manager.</p>
+            </div>
+            <button class="mat-btn danger-btn" id="reset-device" type="button">Reset device</button>
+            <p class="card-help">Holding the Wi-Fi button for 10 seconds also resets the device to default settings.</p>
+            <p class="card-help" id="reset-message" role="status" aria-live="polite"></p>
+        </section>
         </div>
-
-    </div>
-
-    <!-- Footer with version -->
-    <footer style="margin-top:2em;color:#b0b0b0;font-size:0.95em;text-align:center;">
-        <span id="footer-version">v1.x.x</span> &nbsp;|&nbsp; &copy; 2024-2025 <a
-            href="https://github.com/desiFish/GPS-CLOCK-V1"
-            style="color:#b0b0b0;text-decoration:underline;">desiFish</a>
-    </footer>
+        <footer>
+            <div class="footer-meta">
+                <a class="footer-version" id="footer-version" href="https://github.com/desiFish/ESP32-GPS-CLOCK-V1/releases"
+                    target="_blank" rel="noopener noreferrer">--</a>
+                <span class="footer-separator">·</span>
+                <span>&copy; 2024</span>
+                <span class="footer-separator">·</span>
+                <a href="https://github.com/desiFish" target="_blank" rel="noopener noreferrer">desiFish</a>
+                <span class="footer-separator">·</span>
+                <span>Made in India 🇮🇳</span>
+            </div>
+            <p class="footer-prayer">ॐ नमो नारायणाय</p>
+        </footer>
     </div>
 
     <script>
+        fetch('/api/version')
+            .then(r => r.ok ? r.text() : Promise.reject(new Error('Could not fetch version')))
+            .then(version => {
+                document.getElementById('footer-version').textContent = version;
+            })
+            .catch(err => console.error('Error fetching firmware version:', err));
+
         // Online tracker
         function updateStatus() {
-            fetch('/api/status').then(r => {
-                if (r.ok) {
-                    document.getElementById('status-dot').classList.add('online');
-                    document.getElementById('status-text').textContent = 'Online';
-                } else {
-                    document.getElementById('status-dot').classList.remove('online');
-                    document.getElementById('status-text').textContent = 'Offline';
-                }
-            }).catch(_ => {
-                document.getElementById('status-dot').classList.remove('online');
-                document.getElementById('status-text').textContent = 'Offline';
-            });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1200);
+            fetch('/api/status', { signal: controller.signal })
+                .then(response => setStatus(response.ok))
+                .catch(() => setStatus(false))
+                .finally(() => clearTimeout(timeoutId));
+        }
+
+        function setStatus(isOnline) {
+            document.getElementById('status-dot').classList.toggle('online', isOnline);
+            document.getElementById('status-text').textContent = isOnline ? 'Online' : 'Offline';
         }
         setInterval(updateStatus, 3000);
         updateStatus();
@@ -255,6 +533,24 @@
         const buzzerLabel = document.getElementById('buzzer-label');
         const displayDarkSwitch = document.getElementById('display-dark-switch');
         const displayDarkLabel = document.getElementById('display-dark-label');
+        const minimumBrightnessSlider = document.getElementById('minimum-brightness');
+        const minimumBrightnessLabel = document.getElementById('minimum-brightness-label');
+        const timeFormatSwitch = document.getElementById('time-format-switch');
+        const timeFormatLabel = document.getElementById('time-format-label');
+        const timezoneOffsetInput = document.getElementById('timezone-offset');
+        const timezoneMessage = document.getElementById('timezone-message');
+        const resetButton = document.getElementById('reset-device');
+        const resetMessage = document.getElementById('reset-message');
+        let timezoneOffsetSeconds = 19800;
+        let saved24HourMode = false;
+
+        function beepAfterSettingUpdate() {
+            fetch('/api/settings/changed', { method: 'POST' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Could not play settings confirmation beep');
+                })
+                .catch(err => console.error('Error playing settings confirmation beep:', err));
+        }
 
         function getBuzzerState() {
             fetch('/api/buzzer').then(r => r.json()).then(data => {
@@ -272,12 +568,142 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ on: buzzerSwitch.checked })
-            }).then(() => {
+            }).then(r => {
+                if (!r.ok) throw new Error('Could not save buzzer setting');
                 buzzerLabel.textContent = buzzerSwitch.checked ? 'Buzzer ON' : 'Buzzer OFF';
                 console.log('Updated buzzer state:', buzzerSwitch.checked ? 'ON' : 'OFF');
+                beepAfterSettingUpdate();
             }).catch(err => {
                 console.error('Error updating buzzer state:', err);
             });
+        });
+
+        function formatTimezoneOffset(offsetSeconds) {
+            const sign = offsetSeconds < 0 ? '-' : '+';
+            const absoluteMinutes = Math.abs(offsetSeconds) / 60;
+            const hours = Math.floor(absoluteMinutes / 60);
+            const minutes = absoluteMinutes % 60;
+            return `${sign}${hours}:${String(minutes).padStart(2, '0')}`;
+        }
+
+        function parseTimezoneOffset(value) {
+            const match = /^([+-])(\d{1,2}):([0-5]\d)$/.exec(value.trim());
+            if (!match) {
+                throw new Error('Enter an offset like +5:30 or -4:00.');
+            }
+
+            const sign = match[1] === '-' ? -1 : 1;
+            const hours = Number(match[2]);
+            const minutes = Number(match[3]);
+            const offsetSeconds = sign * (hours * 3600 + minutes * 60);
+            if (offsetSeconds < -43200 || offsetSeconds > 50400 ||
+                (sign > 0 && hours === 14 && minutes !== 0)) {
+                throw new Error('Offset must be between -12:00 and +14:00.');
+            }
+            return offsetSeconds;
+        }
+
+        function updateTimeFormatLabel() {
+            timeFormatLabel.textContent = timeFormatSwitch.checked ? '24-hour' : '12-hour';
+        }
+
+        async function saveTimeSettings(offsetSeconds = timezoneOffsetSeconds, updateTimezoneInput = true) {
+            const response = await fetch('/api/time/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode24: timeFormatSwitch.checked,
+                    timezoneOffsetSeconds: offsetSeconds
+                })
+            });
+            const responseText = await response.text();
+            if (!response.ok) {
+                throw new Error(`Could not save time settings: ${responseText || response.statusText}`);
+            }
+
+            const data = JSON.parse(responseText);
+            saved24HourMode = !!data.mode24;
+            timeFormatSwitch.checked = saved24HourMode;
+            timezoneOffsetSeconds = Number(data.timezoneOffsetSeconds);
+            if (updateTimezoneInput) {
+                timezoneOffsetInput.value = formatTimezoneOffset(timezoneOffsetSeconds);
+            }
+            updateTimeFormatLabel();
+            beepAfterSettingUpdate();
+        }
+
+        function getTimeSettings() {
+            fetch('/api/time/settings')
+                .then(response => response.ok ? response.json() : Promise.reject(new Error('Could not load time settings')))
+                .then(data => {
+                    saved24HourMode = !!data.mode24;
+                    timeFormatSwitch.checked = saved24HourMode;
+                    timezoneOffsetSeconds = Number(data.timezoneOffsetSeconds);
+                    timezoneOffsetInput.value = formatTimezoneOffset(timezoneOffsetSeconds);
+                    updateTimeFormatLabel();
+                })
+                .catch(err => console.error('Error fetching time settings:', err));
+        }
+
+        timeFormatSwitch.addEventListener('change', () => {
+            updateTimeFormatLabel();
+            saveTimeSettings(timezoneOffsetSeconds, false).catch(err => {
+                timeFormatSwitch.checked = saved24HourMode;
+                updateTimeFormatLabel();
+                console.error('Error updating time format:', err);
+            });
+        });
+
+        document.getElementById('save-timezone').addEventListener('click', () => {
+            timezoneMessage.textContent = '';
+            try {
+                const offsetSeconds = parseTimezoneOffset(timezoneOffsetInput.value);
+                saveTimeSettings(offsetSeconds)
+                    .then(() => {
+                        timezoneMessage.textContent = `Saved as ${offsetSeconds} seconds from UTC.`;
+                    })
+                    .catch(err => {
+                        timezoneMessage.textContent = 'Could not save timezone. Please try again.';
+                        console.error('Error saving timezone:', err);
+                    });
+            } catch (err) {
+                timezoneMessage.textContent = err.message;
+            }
+        });
+
+        resetButton.addEventListener('click', async () => {
+            if (!window.confirm('Reset all settings and Wi-Fi credentials to defaults?')) {
+                return;
+            }
+
+            resetButton.disabled = true;
+            resetMessage.textContent = 'Starting reset…';
+            try {
+                const response = await fetch('/api/reset', { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Could not reset device');
+                }
+
+                let secondsLeft = Number(data.rebootInSeconds);
+                if (!Number.isInteger(secondsLeft) || secondsLeft < 1) {
+                    throw new Error('Backend returned an invalid reboot delay');
+                }
+                resetMessage.textContent = `Resetting in ${secondsLeft} seconds…`;
+                const countdown = setInterval(() => {
+                    secondsLeft -= 1;
+                    if (secondsLeft <= 0) {
+                        clearInterval(countdown);
+                        resetMessage.textContent = 'Restarting…';
+                    } else {
+                        resetMessage.textContent = `Resetting in ${secondsLeft} seconds…`;
+                    }
+                }, 1000);
+            } catch (error) {
+                resetButton.disabled = false;
+                resetMessage.textContent = 'Reset failed. Please try again.';
+                console.error('Error resetting device:', error);
+            }
         });
 
         // Deep sleep functions removed
@@ -295,24 +721,53 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: displayDarkSwitch.checked })
-            }).then(() => {
+            }).then(r => {
+                if (!r.ok) throw new Error('Could not save display setting');
                 displayDarkLabel.textContent = displayDarkSwitch.checked ? 'Enabled' : 'Disabled';
+                beepAfterSettingUpdate();
+            }).catch(err => {
+                console.error('Error updating display setting:', err);
             });
+        });
+
+        function setMinimumBrightness(value) {
+            minimumBrightnessSlider.value = value;
+            minimumBrightnessLabel.textContent = `${value} / 255`;
+        }
+
+        function getMinimumBrightness() {
+            fetch('/api/display/minimum-brightness')
+                .then(r => r.ok ? r.json() : Promise.reject(new Error('Could not load brightness setting')))
+                .then(data => setMinimumBrightness(data.value))
+                .catch(err => console.error('Error fetching minimum brightness:', err));
+        }
+
+        minimumBrightnessSlider.addEventListener('input', () => {
+            minimumBrightnessLabel.textContent = `${minimumBrightnessSlider.value} / 255`;
+        });
+
+        minimumBrightnessSlider.addEventListener('change', () => {
+            fetch('/api/display/minimum-brightness', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: Number(minimumBrightnessSlider.value) })
+            })
+                .then(r => r.ok ? r.json() : Promise.reject(new Error('Could not save brightness setting')))
+                .then(data => {
+                    setMinimumBrightness(data.value);
+                    beepAfterSettingUpdate();
+                })
+                .catch(err => {
+                    console.error('Error updating minimum brightness:', err);
+                    getMinimumBrightness();
+                });
         });
 
         // Initialize all states on page load
         getBuzzerState(); // This will also handle buzzer dark state if buzzer is on
         getDisplayDarkState();
-
-        // Footer version fetch
-        fetch('/api/version')
-            .then(r => r.ok ? r.text() : Promise.reject())
-            .then(ver => {
-                document.getElementById('footer-version').textContent = ver;
-            })
-            .catch(() => {
-                document.getElementById('footer-version').textContent = 'Error';
-            });
+        getMinimumBrightness();
+        getTimeSettings();
     </script>
 </body>
 
