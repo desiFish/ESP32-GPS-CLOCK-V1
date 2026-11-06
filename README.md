@@ -247,6 +247,8 @@ Temperature readings can be higher than room temperature if the BME280 is close 
         <p><em>Web interface — Mobile view 📱</em></p>
       </td>
     </tr>
+  </table>
+  <table>
     <tr>
       <!-- First Row -->
       <td width="33%">
